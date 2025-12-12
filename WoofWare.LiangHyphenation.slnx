@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="WoofWare.LiangHyphenation.Test/WoofWare.LiangHyphenation.Test.fsproj" />
+  <Project Path="WoofWare.LiangHyphenation/WoofWare.LiangHyphenation.fsproj" />
+</Solution>
