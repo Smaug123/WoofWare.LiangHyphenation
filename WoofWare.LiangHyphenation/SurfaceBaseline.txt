@@ -70,7 +70,6 @@ WoofWare.LiangHyphenation.PackedTrie.get_Bases [method]: unit -> int []
 WoofWare.LiangHyphenation.PackedTrie.get_CharMap [method]: unit -> int []
 WoofWare.LiangHyphenation.PackedTrie.get_Data [method]: unit -> WoofWare.LiangHyphenation.PackedTrieEntry []
 WoofWare.LiangHyphenation.PackedTrieEntry inherit System.ValueType, implements WoofWare.LiangHyphenation.PackedTrieEntry System.IEquatable, System.Collections.IStructuralEquatable, WoofWare.LiangHyphenation.PackedTrieEntry System.IComparable, System.IComparable, System.Collections.IStructuralComparable
-WoofWare.LiangHyphenation.PackedTrieEntry..ctor [constructor]: (char, System.Byte, int)
 WoofWare.LiangHyphenation.PackedTrieEntry..ctor [constructor]: System.UInt64
 WoofWare.LiangHyphenation.PackedTrieEntry.Char [property]: [read-only] char
 WoofWare.LiangHyphenation.PackedTrieEntry.Empty [static property]: [read-only] WoofWare.LiangHyphenation.PackedTrieEntry
@@ -81,6 +80,8 @@ WoofWare.LiangHyphenation.PackedTrieEntry.get_Link [method]: unit -> int
 WoofWare.LiangHyphenation.PackedTrieEntry.get_Priority [method]: unit -> System.Byte
 WoofWare.LiangHyphenation.PackedTrieEntry.get_Value [method]: unit -> System.UInt64
 WoofWare.LiangHyphenation.PackedTrieEntry.Link [property]: [read-only] int
+WoofWare.LiangHyphenation.PackedTrieEntry.OfComponents [static method]: char -> System.Byte -> int -> WoofWare.LiangHyphenation.PackedTrieEntry
+WoofWare.LiangHyphenation.PackedTrieEntry.OfValue [static method]: System.UInt64 -> WoofWare.LiangHyphenation.PackedTrieEntry
 WoofWare.LiangHyphenation.PackedTrieEntry.Priority [property]: [read-only] System.Byte
 WoofWare.LiangHyphenation.PackedTrieEntry.Value [property]: [read-only] System.UInt64
 WoofWare.LiangHyphenation.PackedTrieModule inherit obj
