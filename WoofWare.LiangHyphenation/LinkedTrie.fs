@@ -51,7 +51,9 @@ type LinkedTrieBuilder () =
     // Root is the conceptual "start" state; its children are the first pattern characters
     let root = LinkedTrieNode.create '\000' 0uy
 
-    /// Insert a parsed pattern into the trie
+    /// Insert a parsed pattern into the trie.
+    /// Time: O(m * s) where m is pattern length and s is max sibling count at each trie level.
+    /// In the worst case s is bounded by alphabet size, but typically s is small because patterns share prefixes.
     member _.Insert (pattern : struct (char * byte) array) : unit =
         if pattern.Length <> 0 then
             let mutable current = root

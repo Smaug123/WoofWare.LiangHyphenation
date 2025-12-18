@@ -42,9 +42,11 @@ type PackedTrieEntry =
     member inline this.Link : int<trieState> =
         LanguagePrimitives.Int32WithMeasure (int (this.Value >>> 20))
 
-    static member Empty = PackedTrieEntry (0UL)
+    static member Empty = PackedTrieEntry 0UL
 
 /// The packed trie data structure for efficient pattern matching.
+/// You will normally extract a pre-computed one of these from the library using `LanguageData.load`,
+/// and consume it with the methods in the `Hyphenation` module.
 type PackedTrie =
     {
         /// The packed array of transitions (indexed by base + alphabetIndex)
@@ -57,6 +59,9 @@ type PackedTrie =
         AlphabetSize : int<alphabetIndex>
     }
 
+/// The packed trie data structure for efficient pattern matching.
+/// You will normally extract a pre-computed one of these from the library using `LanguageData.load`,
+/// and consume it with the methods in the `Hyphenation` module.
 [<RequireQualifiedAccess>]
 module PackedTrie =
     /// The root state
