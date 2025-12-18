@@ -258,3 +258,112 @@ module PropertyTests =
         packedResult |> shouldEqual naiveResult
         // Word has no matching patterns, so all priorities should be 0
         packedResult |> shouldEqual [| 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy |]
+
+// ============================================================================
+// Position Correctness Tests (independent of reference implementation)
+// ============================================================================
+
+[<TestFixture>]
+module PositionCorrectnessTests =
+
+    let config =
+        Config.QuickThrowOnFailure.WithMaxTest(1000).WithQuietOnSuccess(true)
+
+    /// Generate a lowercase letter
+    let lowercaseLetter: Gen<char> = Gen.choose (int 'a', int 'z') |> Gen.map char
+
+    /// Generate an odd priority (1, 3, 5, 7, 9) - these create hyphenation points
+    let oddPriority: Gen<int> = Gen.elements [ 1; 3; 5; 7; 9 ]
+
+    /// Generate two distinct lowercase letters
+    let twoDistinctLetters: Gen<char * char> =
+        gen {
+            let! a = lowercaseLetter
+            let! b = lowercaseLetter |> Gen.filter (fun c -> c <> a)
+            return (a, b)
+        }
+
+    /// Generate three distinct lowercase letters
+    let threeDistinctLetters: Gen<char * char * char> =
+        gen {
+            let! a = lowercaseLetter
+            let! b = lowercaseLetter |> Gen.filter (fun c -> c <> a)
+            let! c = lowercaseLetter |> Gen.filter (fun c -> c <> a && c <> b)
+            return (a, b, c)
+        }
+
+    [<Test>]
+    let ``Property 1: Leading priority at word-start should be discarded`` () =
+        // Pattern "{p}{x}" means "priority p before letter x"
+        // When matching at word start, this priority applies BEFORE the word boundary
+        // and should NOT create a hyphenation point inside the word
+        let property (x: char, y: char) (p: int) =
+            let pattern = $"%d{p}%c{x}"
+            let word = $"%c{x}%c{y}"
+
+            let packedTrie =
+                let builder = PackedTrieBuilder()
+                builder.AddPattern(pattern)
+                builder.Build()
+
+            let points = Hyphenation.getHyphenationPoints packedTrie word
+
+            // The priority applies before 'x', which at word-start is the word boundary.
+            // This should NOT create any hyphenation point inside the word.
+            points.Length |> shouldEqual 0
+
+        let gen = Gen.zip twoDistinctLetters oddPriority |> Arb.fromGen
+        Check.One(config, Prop.forAll gen (fun ((x, y), p) -> property (x, y) p))
+
+    [<Test>]
+    let ``Property 2: Pattern with word-start marker positions priority correctly`` () =
+        // Pattern ".{x}1{y}" should create a hyphenation point between x and y
+        // when the word is "{x}{y}" (matched at word start)
+        let property (x: char, y: char) =
+            let pattern = $".%c{x}1%c{y}"
+            let word = $"%c{x}%c{y}"
+
+            let packedTrie =
+                let builder = PackedTrieBuilder()
+                builder.AddPattern(pattern)
+                builder.Build()
+
+            let points = Hyphenation.getHyphenationPoints packedTrie word
+
+            // Should have exactly one hyphenation point at position 0 (between x and y)
+            points |> shouldEqual [| 0 |]
+
+        let gen = twoDistinctLetters |> Arb.fromGen
+        Check.One(config, Prop.forAll gen property)
+
+    [<Test>]
+    let ``Property 3: Mid-word pattern positions priority correctly`` () =
+        // Pattern "{a}1{b}{c}" means priority 1 between a and b
+        // When matching "x{a}{b}{c}" (where x is a prefix letter), the hyphenation
+        // point should be between a and b (position 1), not shifted elsewhere
+        let property (prefix: char, a: char, b: char, c: char) =
+            let pattern = $"%c{a}1%c{b}%c{c}"
+            let word = $"%c{prefix}%c{a}%c{b}%c{c}"
+
+            let packedTrie =
+                let builder = PackedTrieBuilder()
+                builder.AddPattern(pattern)
+                builder.Build()
+
+            let points = Hyphenation.getHyphenationPoints packedTrie word
+
+            // The pattern matches at position 1 (after prefix).
+            // Priority 1 is between 'a' and 'b', which is inter-letter position 1 in the word.
+            points |> shouldEqual [| 1 |]
+
+        let gen =
+            gen {
+                let! prefix = lowercaseLetter
+                let! (a, b, c) = threeDistinctLetters
+                // Ensure prefix is distinct from a to avoid pattern matching at position 0
+                let! prefix = lowercaseLetter |> Gen.filter (fun p -> p <> a)
+                return (prefix, a, b, c)
+            }
+            |> Arb.fromGen
+
+        Check.One(config, Prop.forAll gen property)
