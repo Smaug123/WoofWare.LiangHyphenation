@@ -2,6 +2,7 @@ namespace WoofWare.LiangHyphenation.Construction
 
 open WoofWare.LiangHyphenation
 open System.Collections.Generic
+open System.Runtime.CompilerServices
 
 /// Module containing methods for compressing the trie.
 /// Suffix compression takes an existing trie and merges common subtries together, starting from the leaves
@@ -37,7 +38,8 @@ module SuffixCompression =
             equal
         | _ -> false
 
-    /// Hash a node based on its structure (for identifying equivalent nodes)
+    /// Hash a node based on its structure (for identifying equivalent nodes).
+    /// Uses identity hash for children since they've already been compressed to canonical nodes.
     let private hashNode (node : LinkedTrieNode) : int =
         let mutable h = hash node.Char
         h <- h * 31 + hashPriorities node.PatternPriorities
@@ -46,7 +48,7 @@ module SuffixCompression =
             h * 31
             + (
                 match node.Left with
-                | Some n -> hash n
+                | Some n -> RuntimeHelpers.GetHashCode n
                 | None -> 0
             )
 
@@ -54,24 +56,39 @@ module SuffixCompression =
             h * 31
             + (
                 match node.Right with
-                | Some n -> hash n
+                | Some n -> RuntimeHelpers.GetHashCode n
                 | None -> 0
             )
 
         h
 
-    /// Check if two nodes are structurally equivalent
+    /// Compare two option nodes by the identity of their contained nodes (not the option wrappers).
+    let private optionNodesSame (a : LinkedTrieNode option) (b : LinkedTrieNode option) : bool =
+        match a, b with
+        | None, None -> true
+        | Some nodeA, Some nodeB -> Object.referenceEquals nodeA nodeB
+        | _ -> false
+
+    /// Check if two nodes are structurally equivalent.
+    /// Children are compared by reference identity since they've already been compressed to canonical nodes.
     let private nodesEqual (a : LinkedTrieNode) (b : LinkedTrieNode) : bool =
         a.Char = b.Char
         && prioritiesEqual a.PatternPriorities b.PatternPriorities
-        && Object.referenceEquals a.Left b.Left
-        && Object.referenceEquals a.Right b.Right
+        && optionNodesSame a.Left b.Left
+        && optionNodesSame a.Right b.Right
+
+    /// Reference equality comparer for LinkedTrieNode (avoids expensive structural comparison)
+    let private referenceComparer =
+        { new IEqualityComparer<LinkedTrieNode> with
+            member _.Equals (x, y) = Object.referenceEquals x y
+            member _.GetHashCode x = RuntimeHelpers.GetHashCode x
+        }
 
     /// Perform suffix compression on the trie, merging equivalent subtries.
     /// Returns a mapping from original nodes to canonical nodes.
     let compress (root : LinkedTrieNode option) : Dictionary<LinkedTrieNode, LinkedTrieNode> =
         let canonical = Dictionary<int, ResizeArray<LinkedTrieNode>> ()
-        let mapping = Dictionary<LinkedTrieNode, LinkedTrieNode> ()
+        let mapping = Dictionary<LinkedTrieNode, LinkedTrieNode> referenceComparer
 
         let rec compressNode (node : LinkedTrieNode) : LinkedTrieNode =
             // First, recursively compress children
