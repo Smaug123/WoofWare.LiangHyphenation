@@ -28,7 +28,7 @@ module TestSerialization =
 
     /// Load patterns from an embedded resource text file (one pattern per line).
     let private loadPatternsFromResource (assembly : Assembly) (resourceName : string) : string seq =
-        use stream = assembly.GetManifestResourceStream (resourceName)
+        use stream = assembly.GetManifestResourceStream resourceName
 
         if isNull stream then
             let available = assembly.GetManifestResourceNames () |> String.concat ", "
@@ -42,7 +42,7 @@ module TestSerialization =
             let trimmed = line.Trim ()
 
             if trimmed.Length > 0 then
-                patterns.Add (trimmed)
+                patterns.Add trimmed
 
             line <- reader.ReadLine ()
 
@@ -63,8 +63,8 @@ module TestSerialization =
         let patterns = getPatterns ()
         let exceptions = getExceptions ()
         let builder = PackedTrieBuilder ()
-        builder.AddPatterns (patterns)
-        builder.AddExceptions (exceptions)
+        builder.AddPatterns patterns
+        builder.AddExceptions exceptions
         builder.Build ()
 
     [<Test>]
@@ -80,17 +80,22 @@ module TestSerialization =
         let trie = buildPackedTrie ()
         let freshBytes = PackedTrieSerialization.serialize trie
 
-        let existingBytes = File.ReadAllBytes (embeddedResourcePath)
+        let existingBytes = File.ReadAllBytes embeddedResourcePath
 
         if freshBytes <> existingBytes then
-            failwith
-                $"Embedded resource is out of date. Expected %d{freshBytes.Length} bytes but file has %d{existingBytes.Length} bytes. Run the 'Regenerate embedded resource' test to update."
+            if freshBytes.Length <> existingBytes.Length then
+                failwith
+                    $"Embedded resource is out of date. Expected %d{freshBytes.Length} bytes but file has %d{existingBytes.Length} bytes. Run the 'Regenerate embedded resource' test to update."
+            let firstDifference =
+                seq { 0 .. freshBytes.Length - 1 }
+                |> Seq.find (fun i -> freshBytes.[i] <> existingBytes.[i])
+            failwith $"Embedded resource differs, first at index %i{firstDifference}"
 
     [<Test>]
     let ``Serialization round-trips correctly`` () =
         // Build a trie from some test patterns
         let builder = PackedTrieBuilder ()
-        builder.AddPatterns ([ ".hy3p" ; "4ab1c" ; "1a" ; "tion5" ])
+        builder.AddPatterns [ ".hy3p" ; "4ab1c" ; "1a" ; "tion5" ]
         let original = builder.Build ()
 
         // Serialize and deserialize
@@ -115,7 +120,7 @@ module TestSerialization =
     let ``Deserialized trie produces same hyphenation as original`` () =
         // Build a trie from some test patterns
         let builder = PackedTrieBuilder ()
-        builder.AddPatterns ([ ".hy3p" ; "4ab1c" ; "1a" ; "tion5" ; "ex1am3ple" ])
+        builder.AddPatterns [ ".hy3p" ; "4ab1c" ; "1a" ; "tion5" ; "ex1am3ple" ]
         let original = builder.Build ()
 
         // Serialize and deserialize
