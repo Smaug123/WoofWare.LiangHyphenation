@@ -93,9 +93,15 @@ module TestSerialization =
         // Compare the deserialized tries rather than raw bytes, since GZip output
         // is platform-dependent (e.g., the OS byte in the header differs between Linux and macOS).
         if not (triesEqual freshTrie existingTrie) then
-            let dataMatch = Array.forall2 (fun (x : PackedTrieEntry) (y : PackedTrieEntry) -> x.Value = y.Value) freshTrie.Data existingTrie.Data
+            let dataMatch =
+                Array.forall2
+                    (fun (x : PackedTrieEntry) (y : PackedTrieEntry) -> x.Value = y.Value)
+                    freshTrie.Data
+                    existingTrie.Data
+
             let basesMatch = Array.forall2 (=) freshTrie.Bases existingTrie.Bases
             let charMapMatch = Array.forall2 (=) freshTrie.CharMap existingTrie.CharMap
+
             failwith
                 $"Embedded resource is out of date. Data length: %d{freshTrie.Data.Length} vs %d{existingTrie.Data.Length}, \
                   Bases length: %d{freshTrie.Bases.Length} vs %d{existingTrie.Bases.Length}, \
