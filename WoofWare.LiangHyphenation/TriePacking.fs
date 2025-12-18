@@ -55,8 +55,15 @@ module TriePacking =
 
         count node.Right 0
 
-    /// Pack the trie using first-fit algorithm
-    let pack (root : LinkedTrieNode option) (charMap : int<alphabetIndex> array) (alphabetSize : int) : PackedTrie =
+    /// Pack the trie using first-fit algorithm.
+    /// The `nodes` array should be the result of `collectNodesAndAlphabet` on the same root.
+    let pack
+        (root : LinkedTrieNode option)
+        (nodes : LinkedTrieNode array)
+        (charMap : int<alphabetIndex> array)
+        (alphabetSize : int)
+        : PackedTrie
+        =
         match root with
         | None ->
             {
@@ -67,8 +74,6 @@ module TriePacking =
                 PatternPriorities = [||]
             }
         | Some rootNode ->
-            // Collect all unique nodes
-            let nodes, _ = collectNodesAndAlphabet (Some rootNode)
 
             // Assign state IDs (rootNode = state 0)
             let nodeToState =

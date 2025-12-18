@@ -22,7 +22,7 @@ module Hyphenation =
 
             // Extended word with boundary markers.
             // PERF: in future, stop allocating here
-            let extended = "." + word + "."
+            let extended = "." + word.ToLowerInvariant () + "."
             trace (fun () -> $"Hyphenate '%s{word}' -> extended '%s{extended}'")
 
             // For each starting position, try to match patterns
@@ -34,7 +34,7 @@ module Hyphenation =
                 trace (fun () -> $"  Start=%d{start} (char '%c{extended.[start]}'):")
 
                 while continue' && pos < extended.Length do
-                    let c = Char.ToLowerInvariant extended.[pos]
+                    let c = extended.[pos]
 
                     match PackedTrie.tryTransition trie state c with
                     | ValueSome nextState ->

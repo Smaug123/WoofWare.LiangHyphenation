@@ -43,11 +43,11 @@ type PackedTrieBuilder () =
         // Apply suffix compression
         let _ = SuffixCompression.compress root
 
-        // Collect alphabet
-        let _, charMap = TriePacking.collectNodesAndAlphabet root
+        // Collect nodes and alphabet
+        let nodes, charMap = TriePacking.collectNodesAndAlphabet root
 
         let alphabetSize =
             charMap |> Array.filter (fun x -> x >= 0<alphabetIndex>) |> Array.length
 
         // Pack the trie
-        TriePacking.pack root charMap alphabetSize
+        TriePacking.pack root nodes charMap alphabetSize

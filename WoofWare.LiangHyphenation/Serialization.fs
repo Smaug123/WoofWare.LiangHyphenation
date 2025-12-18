@@ -173,6 +173,8 @@ module LanguageData =
         "WoofWare.LiangHyphenation.Data." + getResourceNameFragment language
 
     /// Load the data for the given language embedded within the WoofWare.LiangHyphenation assembly.
+    ///
+    /// This does no caching. You should cache the result yourself if you want to avoid multiple construction.
     let load (language : KnownLanguage) : PackedTrie =
         let path = getResourceName language
 

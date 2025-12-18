@@ -51,7 +51,7 @@ WoofWare.LiangHyphenation.Construction.TriePacking inherit obj
 WoofWare.LiangHyphenation.Construction.TriePacking.collectNodesAndAlphabet [static method]: WoofWare.LiangHyphenation.Construction.LinkedTrieNode option -> (WoofWare.LiangHyphenation.Construction.LinkedTrieNode [] * int [])
 WoofWare.LiangHyphenation.Construction.TriePacking.countTransitions [static method]: WoofWare.LiangHyphenation.Construction.LinkedTrieNode -> int
 WoofWare.LiangHyphenation.Construction.TriePacking.enumerateTransitions [static method]: WoofWare.LiangHyphenation.Construction.LinkedTrieNode -> struct (char * WoofWare.LiangHyphenation.Construction.LinkedTrieNode) seq
-WoofWare.LiangHyphenation.Construction.TriePacking.pack [static method]: WoofWare.LiangHyphenation.Construction.LinkedTrieNode option -> int [] -> int -> WoofWare.LiangHyphenation.PackedTrie
+WoofWare.LiangHyphenation.Construction.TriePacking.pack [static method]: WoofWare.LiangHyphenation.Construction.LinkedTrieNode option -> WoofWare.LiangHyphenation.Construction.LinkedTrieNode [] -> int [] -> int -> WoofWare.LiangHyphenation.PackedTrie
 WoofWare.LiangHyphenation.Hyphenation inherit obj
 WoofWare.LiangHyphenation.Hyphenation.getHyphenationPoints [static method]: WoofWare.LiangHyphenation.PackedTrie -> string -> int []
 WoofWare.LiangHyphenation.Hyphenation.hyphenate [static method]: WoofWare.LiangHyphenation.PackedTrie -> string -> System.Byte []
