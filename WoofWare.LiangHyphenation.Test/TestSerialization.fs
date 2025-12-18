@@ -75,21 +75,33 @@ module TestSerialization =
         File.WriteAllBytes (embeddedResourcePath, bytes)
         printfn $"Wrote %d{bytes.Length} bytes to %s{embeddedResourcePath}"
 
+    /// Compare two tries for structural equality.
+    let private triesEqual (a : PackedTrie) (b : PackedTrie) : bool =
+        a.Data.Length = b.Data.Length
+        && a.Bases.Length = b.Bases.Length
+        && a.AlphabetSize = b.AlphabetSize
+        && Array.forall2 (fun (x : PackedTrieEntry) (y : PackedTrieEntry) -> x.Value = y.Value) a.Data b.Data
+        && Array.forall2 (=) a.Bases b.Bases
+        && Array.forall2 (=) a.CharMap b.CharMap
+
     [<Test>]
     let ``Embedded resource matches regenerated trie`` () =
-        let trie = buildPackedTrie ()
-        let freshBytes = PackedTrieSerialization.serialize trie
-
+        let freshTrie = buildPackedTrie ()
         let existingBytes = File.ReadAllBytes embeddedResourcePath
+        let existingTrie = PackedTrieSerialization.deserialize existingBytes
 
-        if freshBytes <> existingBytes then
-            if freshBytes.Length <> existingBytes.Length then
-                failwith
-                    $"Embedded resource is out of date. Expected %d{freshBytes.Length} bytes but file has %d{existingBytes.Length} bytes. Run the 'Regenerate embedded resource' test to update."
-            let firstDifference =
-                seq { 0 .. freshBytes.Length - 1 }
-                |> Seq.find (fun i -> freshBytes.[i] <> existingBytes.[i])
-            failwith $"Embedded resource differs, first at index %i{firstDifference}"
+        // Compare the deserialized tries rather than raw bytes, since GZip output
+        // is platform-dependent (e.g., the OS byte in the header differs between Linux and macOS).
+        if not (triesEqual freshTrie existingTrie) then
+            let dataMatch = Array.forall2 (fun (x : PackedTrieEntry) (y : PackedTrieEntry) -> x.Value = y.Value) freshTrie.Data existingTrie.Data
+            let basesMatch = Array.forall2 (=) freshTrie.Bases existingTrie.Bases
+            let charMapMatch = Array.forall2 (=) freshTrie.CharMap existingTrie.CharMap
+            failwith
+                $"Embedded resource is out of date. Data length: %d{freshTrie.Data.Length} vs %d{existingTrie.Data.Length}, \
+                  Bases length: %d{freshTrie.Bases.Length} vs %d{existingTrie.Bases.Length}, \
+                  AlphabetSize: %d{int freshTrie.AlphabetSize} vs %d{int existingTrie.AlphabetSize}, \
+                  Data match: %b{dataMatch}, Bases match: %b{basesMatch}, CharMap match: %b{charMapMatch}. \
+                  Run the 'Regenerate embedded resource' test to update."
 
     [<Test>]
     let ``Serialization round-trips correctly`` () =
