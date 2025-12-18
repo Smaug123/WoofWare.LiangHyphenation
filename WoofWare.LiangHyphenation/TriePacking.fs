@@ -84,6 +84,9 @@ module TriePacking =
 
             let stateCount = int nextState
 
+            if stateCount > 65535 then
+                failwithf "Trie has %d states, but PackedTrieEntry only supports up to 65535" stateCount
+
             // Precompute transitions and sort by count (descending) for better packing
             let sortedNodesWithTransitions =
                 nodes

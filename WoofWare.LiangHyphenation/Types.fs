@@ -30,6 +30,10 @@ type PackedTrieEntry =
 
     /// Construct from individual components: character and link to next state.
     static member OfComponents (char : char) (link : int<trieState>) =
+#if DEBUG
+        if int link > 65535 then
+            failwithf "PackedTrieEntry link %d exceeds 16-bit capacity" (int link)
+#endif
         let charBits = uint32 (uint16 char)
         let linkBits = (uint32 (int link)) <<< 16
 
