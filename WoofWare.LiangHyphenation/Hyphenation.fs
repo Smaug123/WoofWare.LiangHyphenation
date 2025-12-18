@@ -25,7 +25,7 @@ module Hyphenation =
             let extended = "." + word + "."
             trace (fun () -> $"Hyphenate '%s{word}' -> extended '%s{extended}'")
 
-            // For each starting position
+            // For each starting position, try to match patterns
             for start = 0 to extended.Length - 1 do
                 let mutable state = PackedTrie.root
                 let mutable pos = start
@@ -37,20 +37,28 @@ module Hyphenation =
                     let c = Char.ToLowerInvariant extended.[pos]
 
                     match PackedTrie.tryTransition trie state c with
-                    | ValueSome (struct (nextState, priority)) ->
-                        trace (fun () ->
-                            $"    pos=%d{pos} char='%c{c}' -> state=%d{int nextState} priority=%d{int priority}"
-                        )
-                        // Priority at character position `pos` in extended word applies to
-                        // the inter-letter position BEFORE that character.
-                        // Extended word has leading '.', so:
-                        //   - Extended inter-letter position = pos - 1
-                        //   - Original inter-letter position = (pos - 1) - 1 = pos - 2
-                        let interLetterPos = pos - 2
+                    | ValueSome nextState ->
+                        trace (fun () -> $"    pos=%d{pos} char='%c{c}' -> state=%d{int nextState}")
 
-                        if interLetterPos >= 0 && interLetterPos < priorities.Length then
-                            if priority > priorities.[interLetterPos] then
-                                priorities.[interLetterPos] <- priority
+                        // Check if we've reached a pattern-end state
+                        match PackedTrie.getPatternPriorities trie nextState with
+                        | Some patternPriorities ->
+                            trace (fun () ->
+                                let prioStr = patternPriorities |> Array.map string |> String.concat ","
+
+                                $"      Pattern end! Priorities=[%s{prioStr}]"
+                            )
+                            // Apply the pattern's priority vector at the appropriate positions.
+                            // patternPriorities[i] applies at extended inter-letter position (start + i).
+                            // Extended inter-letter pos k maps to original inter-letter pos (k - 2).
+                            // So patternPriorities[i] applies at original pos (start + i - 2).
+                            for i = 0 to patternPriorities.Length - 1 do
+                                let origPos = start + i - 2
+
+                                if origPos >= 0 && origPos < priorities.Length then
+                                    if patternPriorities.[i] > priorities.[origPos] then
+                                        priorities.[origPos] <- patternPriorities.[i]
+                        | None -> ()
 
                         state <- nextState
                         pos <- pos + 1

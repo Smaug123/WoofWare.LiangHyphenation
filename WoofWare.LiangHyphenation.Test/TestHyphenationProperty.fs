@@ -16,31 +16,50 @@ module NaiveTrie =
     /// A naive trie node using Map for transitions
     type NaiveTrieNode =
         {
-            /// Transitions: char -> (priority at this transition, child node)
-            Children : Map<char, byte * NaiveTrieNode>
+            /// Transitions: char -> child node
+            Children : Map<char, NaiveTrieNode>
+            /// If this node is a pattern-end, the full priority vector
+            PatternPriorities : byte array option
         }
 
     let empty : NaiveTrieNode =
         {
             Children = Map.empty
+            PatternPriorities = None
         }
 
-    /// Insert a parsed pattern into the naive trie
-    let rec insert (pattern : struct (char * byte) array) (index : int) (node : NaiveTrieNode) : NaiveTrieNode =
-        if index >= pattern.Length then
-            node
-        else
-            let struct (c, priority) = pattern.[index]
+    /// Merge priority vectors element-wise (max)
+    let mergePriorities (a : byte array option) (b : byte array) : byte array =
+        match a with
+        | None -> Array.copy b
+        | Some existing ->
+            let result = Array.copy existing
 
-            let existingPriority, child =
+            for i = 0 to min existing.Length b.Length - 1 do
+                if b.[i] > result.[i] then
+                    result.[i] <- b.[i]
+
+            result
+
+    /// Insert a parsed pattern into the naive trie
+    let rec insert (pattern : ParsedPattern) (index : int) (node : NaiveTrieNode) : NaiveTrieNode =
+        if index >= pattern.Chars.Length then
+            // Reached end of pattern - store priority vector
+            { node with
+                PatternPriorities = Some (mergePriorities node.PatternPriorities pattern.Priorities)
+            }
+        else
+            let c = pattern.Chars.[index]
+
+            let child =
                 match Map.tryFind c node.Children with
-                | Some (p, child) -> (max p priority, child)
-                | None -> (priority, empty)
+                | Some child -> child
+                | None -> empty
 
             let newChild = insert pattern (index + 1) child
 
             { node with
-                Children = Map.add c (existingPriority, newChild) node.Children
+                Children = Map.add c newChild node.Children
             }
 
     /// Build a naive trie from patterns
@@ -50,9 +69,9 @@ module NaiveTrie =
         |> Seq.fold (fun node pattern -> insert pattern 0 node) empty
 
     /// Try to transition in the naive trie
-    let tryTransition (node : NaiveTrieNode) (c : char) : struct (byte * NaiveTrieNode) voption =
+    let tryTransition (node : NaiveTrieNode) (c : char) : NaiveTrieNode voption =
         match Map.tryFind c node.Children with
-        | Some (priority, child) -> ValueSome (struct (priority, child))
+        | Some child -> ValueSome child
         | None -> ValueNone
 
     /// Hyphenate using the naive trie (reference implementation)
@@ -72,12 +91,20 @@ module NaiveTrie =
                     let c = extended.[pos]
 
                     match tryTransition node c with
-                    | ValueSome (struct (priority, nextNode)) ->
-                        let interLetterPos = pos - 2
+                    | ValueSome nextNode ->
+                        // Check if we've reached a pattern end
+                        match nextNode.PatternPriorities with
+                        | Some patternPriorities ->
+                            // Apply priority vector at appropriate positions
+                            // patternPriorities[i] applies at extended inter-letter position (start + i)
+                            // which maps to original inter-letter position (start + i - 2)
+                            for i = 0 to patternPriorities.Length - 1 do
+                                let origPos = start + i - 2
 
-                        if interLetterPos >= 0 && interLetterPos < priorities.Length then
-                            if priority > priorities.[interLetterPos] then
-                                priorities.[interLetterPos] <- priority
+                                if origPos >= 0 && origPos < priorities.Length then
+                                    if patternPriorities.[i] > priorities.[origPos] then
+                                        priorities.[origPos] <- patternPriorities.[i]
+                        | None -> ()
 
                         node <- nextNode
                         pos <- pos + 1
@@ -135,12 +162,6 @@ module Generators =
 [<TestFixture>]
 module PropertyTests =
 
-    let config =
-        Config.QuickThrowOnFailure.WithMaxTest(10000).WithQuietOnSuccess(true).WithParallelRunConfig
-            {
-                MaxDegreeOfParallelism = max 1 (Environment.ProcessorCount / 2)
-            }
-
     [<Test>]
     let ``Packed trie matches naive trie for hyphenation`` () =
         let mutable nonZeroCount = 0
@@ -170,7 +191,7 @@ module PropertyTests =
 
         let gen = Gen.zip Generators.patternList Generators.lowercaseWord |> Arb.fromGen
 
-        Check.One (config, Prop.forAll gen (fun (patterns, word) -> property patterns word))
+        Check.One (FsCheckConfig.config, Prop.forAll gen (fun (patterns, word) -> property patterns word))
 
         // Verify we hit interesting cases
         printfn $"Distribution: %d{nonZeroCount} non-zero, %d{zeroCount} zero"
@@ -195,7 +216,7 @@ module PropertyTests =
 
         let gen = Gen.zip Generators.patternList Generators.lowercaseWord |> Arb.fromGen
 
-        Check.One (config, Prop.forAll gen (fun (patterns, word) -> property patterns word))
+        Check.One (FsCheckConfig.config, Prop.forAll gen (fun (patterns, word) -> property patterns word))
 
     [<Test>]
     let ``Hyphenation is deterministic`` () =
@@ -212,7 +233,7 @@ module PropertyTests =
 
         let gen = Gen.zip Generators.patternList Generators.lowercaseWord |> Arb.fromGen
 
-        Check.One (config, Prop.forAll gen (fun (patterns, word) -> property patterns word))
+        Check.One (FsCheckConfig.config, Prop.forAll gen (fun (patterns, word) -> property patterns word))
 
     [<Test>]
     let ``Empty pattern set produces no hyphenation`` () =
@@ -225,7 +246,7 @@ module PropertyTests =
             points.Length |> shouldEqual 0
 
         let gen = Generators.lowercaseWord |> Arb.fromGen
-        Check.One (config, Prop.forAll gen property)
+        Check.One (FsCheckConfig.config, Prop.forAll gen property)
 
     [<Test>]
     let ``Short words have no hyphenation points`` () =
@@ -243,7 +264,7 @@ module PropertyTests =
             singleCharPoints.Length |> shouldEqual 0
 
         let gen = Generators.patternList |> Arb.fromGen
-        Check.One (config, Prop.forAll gen property)
+        Check.One (FsCheckConfig.config, Prop.forAll gen property)
 
     [<Test>]
     let ``Regression: patterns with shared substrings`` () =
@@ -271,8 +292,6 @@ module PropertyTests =
 
 [<TestFixture>]
 module PositionCorrectnessTests =
-
-    let config = Config.QuickThrowOnFailure.WithMaxTest(1000).WithQuietOnSuccess (true)
 
     /// Generate a lowercase letter
     let lowercaseLetter : Gen<char> = Gen.choose (int 'a', int 'z') |> Gen.map char
@@ -308,7 +327,7 @@ module PositionCorrectnessTests =
 
             let packedTrie =
                 let builder = PackedTrieBuilder ()
-                builder.AddPattern (pattern)
+                builder.AddPattern pattern
                 builder.Build ()
 
             let points = Hyphenation.getHyphenationPoints packedTrie word
@@ -318,7 +337,7 @@ module PositionCorrectnessTests =
             points.Length |> shouldEqual 0
 
         let gen = Gen.zip twoDistinctLetters oddPriority |> Arb.fromGen
-        Check.One (config, Prop.forAll gen (fun ((x, y), p) -> property (x, y) p))
+        Check.One (FsCheckConfig.config, Prop.forAll gen (fun ((x, y), p) -> property (x, y) p))
 
     [<Test>]
     let ``Property 2: Pattern with word-start marker positions priority correctly`` () =
@@ -330,7 +349,7 @@ module PositionCorrectnessTests =
 
             let packedTrie =
                 let builder = PackedTrieBuilder ()
-                builder.AddPattern (pattern)
+                builder.AddPattern pattern
                 builder.Build ()
 
             let points = Hyphenation.getHyphenationPoints packedTrie word
@@ -339,7 +358,7 @@ module PositionCorrectnessTests =
             points |> shouldEqual [| 0 |]
 
         let gen = twoDistinctLetters |> Arb.fromGen
-        Check.One (config, Prop.forAll gen property)
+        Check.One (FsCheckConfig.config, Prop.forAll gen property)
 
     [<Test>]
     let ``Property 3: Mid-word pattern positions priority correctly`` () =
@@ -352,7 +371,7 @@ module PositionCorrectnessTests =
 
             let packedTrie =
                 let builder = PackedTrieBuilder ()
-                builder.AddPattern (pattern)
+                builder.AddPattern pattern
                 builder.Build ()
 
             let points = Hyphenation.getHyphenationPoints packedTrie word
@@ -363,12 +382,11 @@ module PositionCorrectnessTests =
 
         let gen =
             gen {
-                let! prefix = lowercaseLetter
-                let! (a, b, c) = threeDistinctLetters
+                let! a, b, c = threeDistinctLetters
                 // Ensure prefix is distinct from a to avoid pattern matching at position 0
                 let! prefix = lowercaseLetter |> Gen.filter (fun p -> p <> a)
                 return (prefix, a, b, c)
             }
             |> Arb.fromGen
 
-        Check.One (config, Prop.forAll gen property)
+        Check.One (FsCheckConfig.config, Prop.forAll gen property)

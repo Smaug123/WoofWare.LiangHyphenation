@@ -34,13 +34,13 @@ module TriePacking =
         (nodes |> Seq.toArray, charMap)
 
     /// Enumerate transitions (children) for a node by walking its Right child's sibling chain
-    let enumerateTransitions (node : LinkedTrieNode) : struct (char * byte * LinkedTrieNode) seq =
+    let enumerateTransitions (node : LinkedTrieNode) : struct (char * LinkedTrieNode) seq =
         let rec loop (child : LinkedTrieNode option) =
             seq {
                 match child with
                 | None -> ()
                 | Some c ->
-                    yield struct (c.Char, c.Priority, c)
+                    yield struct (c.Char, c)
                     yield! loop c.Left
             }
 
@@ -64,6 +64,7 @@ module TriePacking =
                 Bases = [||]
                 CharMap = charMap
                 AlphabetSize = LanguagePrimitives.Int32WithMeasure alphabetSize
+                PatternPriorities = [||]
             }
         | Some rootNode ->
             // Collect all unique nodes
@@ -93,6 +94,9 @@ module TriePacking =
             let usedBases = HashSet<int> ()
             let bases = Array.create stateCount 0<trieIndex>
 
+            // Pattern priorities indexed by state
+            let patternPriorities = Array.create stateCount None
+
             let ensureCapacity (needed : int) =
                 if needed > data.Length then
                     let newSize = max needed (data.Length * 2)
@@ -104,6 +108,9 @@ module TriePacking =
             for node in sortedNodes do
                 let stateId = nodeToState.[node]
                 let transitions = enumerateTransitions node |> Seq.toArray
+
+                // Store pattern priorities if this is a pattern-end node
+                patternPriorities.[int stateId] <- node.PatternPriorities
 
                 if transitions.Length = 0 then
                     // No transitions - just need a valid base that's not used
@@ -126,7 +133,7 @@ module TriePacking =
                             // Check if all transitions fit
                             let mutable fits = true
 
-                            for struct (c, _, _) in transitions do
+                            for struct (c, _) in transitions do
                                 let charIdx = int charMap.[int c]
                                 let slot = baseIdx + charIdx
 
@@ -139,12 +146,12 @@ module TriePacking =
                     usedBases.Add (baseIdx) |> ignore
                     bases.[int stateId] <- LanguagePrimitives.Int32WithMeasure baseIdx
 
-                    for struct (c, priority, childNode) in transitions do
+                    for struct (c, childNode) in transitions do
                         let charIdx = int charMap.[int c]
                         let slot = baseIdx + charIdx
                         ensureCapacity (slot + 1)
                         let childState = nodeToState.[childNode]
-                        data.[slot] <- PackedTrieEntry.OfComponents c priority childState
+                        data.[slot] <- PackedTrieEntry.OfComponents c childState
                         occupied.Add (slot) |> ignore
 
             // Trim data array
@@ -156,4 +163,5 @@ module TriePacking =
                 Bases = bases
                 CharMap = charMap
                 AlphabetSize = LanguagePrimitives.Int32WithMeasure alphabetSize
+                PatternPriorities = patternPriorities
             }

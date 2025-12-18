@@ -8,10 +8,39 @@ open System.Collections.Generic
 /// and working upwards. (See p16 of Liang's thesis.)
 [<RequireQualifiedAccess>]
 module SuffixCompression =
+    /// Hash a byte array option for use in node hashing
+    let private hashPriorities (priorities : byte array option) : int =
+        match priorities with
+        | None -> 0
+        | Some arr ->
+            let mutable h = arr.Length
+
+            for b in arr do
+                h <- h * 31 + int b
+
+            h
+
+    /// Check if two priority arrays are equal
+    let private prioritiesEqual (a : byte array option) (b : byte array option) : bool =
+        match a, b with
+        | None, None -> true
+        | Some arrA, Some arrB when arrA.Length = arrB.Length ->
+            let mutable equal = true
+            let mutable i = 0
+
+            while equal && i < arrA.Length do
+                if arrA.[i] <> arrB.[i] then
+                    equal <- false
+
+                i <- i + 1
+
+            equal
+        | _ -> false
+
     /// Hash a node based on its structure (for identifying equivalent nodes)
     let private hashNode (node : LinkedTrieNode) : int =
         let mutable h = hash node.Char
-        h <- h * 31 + int node.Priority
+        h <- h * 31 + hashPriorities node.PatternPriorities
 
         h <-
             h * 31
@@ -34,7 +63,7 @@ module SuffixCompression =
     /// Check if two nodes are structurally equivalent
     let private nodesEqual (a : LinkedTrieNode) (b : LinkedTrieNode) : bool =
         a.Char = b.Char
-        && a.Priority = b.Priority
+        && prioritiesEqual a.PatternPriorities b.PatternPriorities
         && Object.referenceEquals a.Left b.Left
         && Object.referenceEquals a.Right b.Right
 

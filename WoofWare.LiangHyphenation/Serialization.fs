@@ -21,7 +21,7 @@ module PackedTrieSerialization =
         writer.Write magic
         writer.Write version
 
-        // Write Data array
+        // Write Data array (32-bit entries now)
         writer.Write trie.Data.Length
 
         for entry in trie.Data do
@@ -48,6 +48,16 @@ module PackedTrieSerialization =
         // Write AlphabetSize
         writer.Write (int trie.AlphabetSize)
 
+        // Write PatternPriorities array
+        writer.Write trie.PatternPriorities.Length
+
+        for priorities in trie.PatternPriorities do
+            match priorities with
+            | None -> writer.Write 0uy // 0 length means None
+            | Some arr ->
+                writer.Write (byte arr.Length)
+                writer.Write arr
+
     let private deserializeFromStream (stream : Stream) : PackedTrie =
         use reader = new BinaryReader (stream, Encoding.UTF8, leaveOpen = true)
 
@@ -61,13 +71,13 @@ module PackedTrieSerialization =
         let readVersion = reader.ReadByte ()
 
         if readVersion <> version then
-            failwith $"Unsupported PackedTrie version: %d{int readVersion}"
+            failwith $"Unsupported PackedTrie version: %d{int readVersion} (expected %d{int version})"
 
-        // Read Data array
+        // Read Data array (32-bit entries)
         let dataLength = reader.ReadInt32 ()
 
         let trieData =
-            Array.init dataLength (fun _ -> PackedTrieEntry.OfValue (reader.ReadUInt64 ()))
+            Array.init dataLength (fun _ -> PackedTrieEntry.OfValue (reader.ReadUInt32 ()))
 
         // Read Bases array
         let basesLength = reader.ReadInt32 ()
@@ -89,11 +99,23 @@ module PackedTrieSerialization =
         let alphabetSize : int<alphabetIndex> =
             LanguagePrimitives.Int32WithMeasure (reader.ReadInt32 ())
 
+        // Read PatternPriorities array
+        let patternPrioritiesLength = reader.ReadInt32 ()
+
+        let patternPriorities =
+            Array.init
+                patternPrioritiesLength
+                (fun _ ->
+                    let len = int (reader.ReadByte ())
+                    if len = 0 then None else Some (reader.ReadBytes len)
+                )
+
         {
             Data = trieData
             Bases = bases
             CharMap = charMap
             AlphabetSize = alphabetSize
+            PatternPriorities = patternPriorities
         }
 
     /// Serialize a PackedTrie to a GZip-compressed byte array, suitable for later deserialization with

@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <Compile Include="UnionCases.fs" />
+    <Compile Include="FsCheck.fs" />
     <Compile Include="TestHyphenationProperty.fs" />
     <Compile Include="TestHyphenation.fs" />
     <Compile Include="TestIntegration.fs" />

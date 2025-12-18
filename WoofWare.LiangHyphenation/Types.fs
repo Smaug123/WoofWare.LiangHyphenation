@@ -12,44 +12,40 @@ type trieState
 [<Measure>]
 type alphabetIndex
 
-/// A single packed trie entry (64 bits):
+/// A single packed trie entry (32 bits):
 /// - Bits 0-15: character code (supports full BMP Unicode)
-/// - Bits 16-19: hyphenation priority (0-9, only 4 bits needed)
-/// - Bits 20-63: link to next state's base index
+/// - Bits 16-31: link to next state
 [<Struct>]
 type PackedTrieEntry =
     {
-        /// The raw 64-bit packed representation.
-        Value : uint64
+        /// The raw 32-bit packed representation.
+        Value : uint32
     }
 
-    /// Construct from a raw 64-bit packed value.
-    static member OfValue (value : uint64) =
+    /// Construct from a raw 32-bit packed value.
+    static member OfValue (value : uint32) =
         {
             Value = value
         }
 
-    /// Construct from individual components: character, hyphenation priority (0-9), and link to next state.
-    static member OfComponents (char : char) (priority : byte) (link : int<trieState>) =
-        let charBits = uint64 (uint16 char)
-        let priorityBits = (uint64 priority &&& 0xFUL) <<< 16
-        let linkBits = (uint64 (int link) &&& 0xFFFFFFFFFFFUL) <<< 20
+    /// Construct from individual components: character and link to next state.
+    static member OfComponents (char : char) (link : int<trieState>) =
+        let charBits = uint32 (uint16 char)
+        let linkBits = (uint32 (int link)) <<< 16
 
         {
-            Value = charBits ||| priorityBits ||| linkBits
+            Value = charBits ||| linkBits
         }
 
     /// The character stored in this entry (bits 0-15).
-    member inline this.Char : char = char (uint16 (this.Value &&& 0xFFFFUL))
-    /// The hyphenation priority at this position (bits 16-19, range 0-9).
-    member inline this.Priority : byte = byte ((this.Value >>> 16) &&& 0xFUL)
+    member inline this.Char : char = char (uint16 (this.Value &&& 0xFFFFu))
 
-    /// The link to the next trie state (bits 20-63).
+    /// The link to the next trie state (bits 16-31).
     member inline this.Link : int<trieState> =
-        LanguagePrimitives.Int32WithMeasure (int (this.Value >>> 20))
+        LanguagePrimitives.Int32WithMeasure (int (this.Value >>> 16))
 
     /// An empty entry (all zeros), representing no transition.
-    static member Empty = PackedTrieEntry.OfValue 0UL
+    static member Empty = PackedTrieEntry.OfValue 0u
 
 /// The packed trie data structure for efficient pattern matching.
 /// You will normally extract a pre-computed one of these from the library using `LanguageData.load`,
@@ -64,6 +60,9 @@ type PackedTrie =
         CharMap : int<alphabetIndex> array
         /// Size of the dense alphabet
         AlphabetSize : int<alphabetIndex>
+        /// Priority vectors for pattern-end states, indexed by state.
+        /// None = not a pattern-end; Some = the full priority vector for patterns ending here.
+        PatternPriorities : byte array option array
     }
 
 /// The packed trie data structure for efficient pattern matching.
@@ -74,13 +73,9 @@ module PackedTrie =
     /// The root state
     let root : int<trieState> = 0<trieState>
 
-    /// Try to transition from a state on a character
-    let inline tryTransition
-        (trie : PackedTrie)
-        (state : int<trieState>)
-        (c : char)
-        : struct (int<trieState> * byte) voption
-        =
+    /// Try to transition from a state on a character.
+    /// Returns the next state if successful.
+    let inline tryTransition (trie : PackedTrie) (state : int<trieState>) (c : char) : int<trieState> voption =
         let charIdx = trie.CharMap.[int c]
 
         if charIdx < 0<alphabetIndex> then
@@ -94,7 +89,8 @@ module PackedTrie =
             else
                 let entry = trie.Data.[slot]
 
-                if entry.Char = c then
-                    ValueSome (struct (entry.Link, entry.Priority))
-                else
-                    ValueNone
+                if entry.Char = c then ValueSome entry.Link else ValueNone
+
+    /// Get the pattern-end priority vector for a state, if any.
+    let inline getPatternPriorities (trie : PackedTrie) (state : int<trieState>) : byte array option =
+        trie.PatternPriorities.[int state]

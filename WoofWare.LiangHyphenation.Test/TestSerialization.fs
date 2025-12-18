@@ -83,14 +83,23 @@ module TestSerialization =
             builder.AddExceptions exceptions
             builder.Build ()
 
+    /// Compare two priority arrays for equality
+    let private prioritiesEqual (a : byte array option) (b : byte array option) : bool =
+        match a, b with
+        | None, None -> true
+        | Some arrA, Some arrB -> arrA.Length = arrB.Length && Array.forall2 (=) arrA arrB
+        | _ -> false
+
     /// Compare two tries for structural equality.
     let private triesEqual (a : PackedTrie) (b : PackedTrie) : bool =
         a.Data.Length = b.Data.Length
         && a.Bases.Length = b.Bases.Length
         && a.AlphabetSize = b.AlphabetSize
+        && a.PatternPriorities.Length = b.PatternPriorities.Length
         && Array.forall2 (fun (x : PackedTrieEntry) (y : PackedTrieEntry) -> x.Value = y.Value) a.Data b.Data
         && Array.forall2 (=) a.Bases b.Bases
         && Array.forall2 (=) a.CharMap b.CharMap
+        && Array.forall2 prioritiesEqual a.PatternPriorities b.PatternPriorities
 
     let languageCases = UnionCases.all<KnownLanguage> ()
 
@@ -143,6 +152,9 @@ module TestSerialization =
         roundTripped.Bases.Length |> shouldEqual original.Bases.Length
         roundTripped.AlphabetSize |> shouldEqual original.AlphabetSize
 
+        roundTripped.PatternPriorities.Length
+        |> shouldEqual original.PatternPriorities.Length
+
         for i = 0 to original.Data.Length - 1 do
             roundTripped.Data.[i].Value |> shouldEqual original.Data.[i].Value
 
@@ -151,6 +163,10 @@ module TestSerialization =
 
         for i = 0 to 65535 do
             roundTripped.CharMap.[i] |> shouldEqual original.CharMap.[i]
+
+        for i = 0 to original.PatternPriorities.Length - 1 do
+            prioritiesEqual roundTripped.PatternPriorities.[i] original.PatternPriorities.[i]
+            |> shouldEqual true
 
     [<Test>]
     let ``Deserialized trie produces same hyphenation as original`` () =

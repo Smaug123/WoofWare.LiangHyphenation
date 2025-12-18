@@ -10,7 +10,7 @@ module TestIntegration =
     let snapshotCases =
         // "university" uses the exception from hyph-en-gb.hyp.txt
         // "hyphenation" uses pattern-based hyphenation (no exception defined)
-        [ "university", "uni-ver-sity" ; "hyphenation", "hy-ph-e-n-a-t-i-o-n" ]
+        [ "university", "uni-ver-sity" ; "hyphenation", "hy-phen-a-tion" ]
         |> List.map TestCaseData
 
     [<TestCaseSource(nameof snapshotCases)>]

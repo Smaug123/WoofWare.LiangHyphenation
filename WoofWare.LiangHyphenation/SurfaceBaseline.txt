@@ -2,31 +2,32 @@ WoofWare.LiangHyphenation.alphabetIndex inherit obj
 WoofWare.LiangHyphenation.Construction.LinkedTrieBuilder inherit obj
 WoofWare.LiangHyphenation.Construction.LinkedTrieBuilder..ctor [constructor]: unit
 WoofWare.LiangHyphenation.Construction.LinkedTrieBuilder.get_Root [method]: unit -> WoofWare.LiangHyphenation.Construction.LinkedTrieNode option
-WoofWare.LiangHyphenation.Construction.LinkedTrieBuilder.Insert [method]: struct (char * System.Byte) [] -> unit
+WoofWare.LiangHyphenation.Construction.LinkedTrieBuilder.Insert [method]: WoofWare.LiangHyphenation.Construction.ParsedPattern -> unit
 WoofWare.LiangHyphenation.Construction.LinkedTrieBuilder.Root [property]: [read-only] WoofWare.LiangHyphenation.Construction.LinkedTrieNode option
 WoofWare.LiangHyphenation.Construction.LinkedTrieNode inherit obj, implements WoofWare.LiangHyphenation.Construction.LinkedTrieNode System.IEquatable, System.Collections.IStructuralEquatable, WoofWare.LiangHyphenation.Construction.LinkedTrieNode System.IComparable, System.IComparable, System.Collections.IStructuralComparable
-WoofWare.LiangHyphenation.Construction.LinkedTrieNode..ctor [constructor]: (char, System.Byte, WoofWare.LiangHyphenation.Construction.LinkedTrieNode option, WoofWare.LiangHyphenation.Construction.LinkedTrieNode option)
+WoofWare.LiangHyphenation.Construction.LinkedTrieNode..ctor [constructor]: (char, System.Byte [] option, WoofWare.LiangHyphenation.Construction.LinkedTrieNode option, WoofWare.LiangHyphenation.Construction.LinkedTrieNode option)
 WoofWare.LiangHyphenation.Construction.LinkedTrieNode.Char [property]: char
 WoofWare.LiangHyphenation.Construction.LinkedTrieNode.Char@ [field]: char
 WoofWare.LiangHyphenation.Construction.LinkedTrieNode.Equals [method]: (WoofWare.LiangHyphenation.Construction.LinkedTrieNode, System.Collections.IEqualityComparer) -> bool
 WoofWare.LiangHyphenation.Construction.LinkedTrieNode.get_Char [method]: unit -> char
 WoofWare.LiangHyphenation.Construction.LinkedTrieNode.get_Left [method]: unit -> WoofWare.LiangHyphenation.Construction.LinkedTrieNode option
-WoofWare.LiangHyphenation.Construction.LinkedTrieNode.get_Priority [method]: unit -> System.Byte
+WoofWare.LiangHyphenation.Construction.LinkedTrieNode.get_PatternPriorities [method]: unit -> System.Byte [] option
 WoofWare.LiangHyphenation.Construction.LinkedTrieNode.get_Right [method]: unit -> WoofWare.LiangHyphenation.Construction.LinkedTrieNode option
 WoofWare.LiangHyphenation.Construction.LinkedTrieNode.Left [property]: WoofWare.LiangHyphenation.Construction.LinkedTrieNode option
 WoofWare.LiangHyphenation.Construction.LinkedTrieNode.Left@ [field]: WoofWare.LiangHyphenation.Construction.LinkedTrieNode option
-WoofWare.LiangHyphenation.Construction.LinkedTrieNode.Priority [property]: System.Byte
-WoofWare.LiangHyphenation.Construction.LinkedTrieNode.Priority@ [field]: System.Byte
+WoofWare.LiangHyphenation.Construction.LinkedTrieNode.PatternPriorities [property]: System.Byte [] option
+WoofWare.LiangHyphenation.Construction.LinkedTrieNode.PatternPriorities@ [field]: System.Byte [] option
 WoofWare.LiangHyphenation.Construction.LinkedTrieNode.Right [property]: WoofWare.LiangHyphenation.Construction.LinkedTrieNode option
 WoofWare.LiangHyphenation.Construction.LinkedTrieNode.Right@ [field]: WoofWare.LiangHyphenation.Construction.LinkedTrieNode option
 WoofWare.LiangHyphenation.Construction.LinkedTrieNode.set_Char [method]: char -> unit
 WoofWare.LiangHyphenation.Construction.LinkedTrieNode.set_Left [method]: WoofWare.LiangHyphenation.Construction.LinkedTrieNode option -> unit
-WoofWare.LiangHyphenation.Construction.LinkedTrieNode.set_Priority [method]: System.Byte -> unit
+WoofWare.LiangHyphenation.Construction.LinkedTrieNode.set_PatternPriorities [method]: System.Byte [] option -> unit
 WoofWare.LiangHyphenation.Construction.LinkedTrieNode.set_Right [method]: WoofWare.LiangHyphenation.Construction.LinkedTrieNode option -> unit
 WoofWare.LiangHyphenation.Construction.LinkedTrieNodeModule inherit obj
-WoofWare.LiangHyphenation.Construction.LinkedTrieNodeModule.create [static method]: char -> System.Byte -> WoofWare.LiangHyphenation.Construction.LinkedTrieNode
+WoofWare.LiangHyphenation.Construction.LinkedTrieNodeModule.create [static method]: char -> WoofWare.LiangHyphenation.Construction.LinkedTrieNode
 WoofWare.LiangHyphenation.Construction.LinkedTrieNodeModule.findOrAddChild [static method]: char -> WoofWare.LiangHyphenation.Construction.LinkedTrieNode -> WoofWare.LiangHyphenation.Construction.LinkedTrieNode
 WoofWare.LiangHyphenation.Construction.LinkedTrieNodeModule.findOrAddSibling [static method]: char -> WoofWare.LiangHyphenation.Construction.LinkedTrieNode -> WoofWare.LiangHyphenation.Construction.LinkedTrieNode
+WoofWare.LiangHyphenation.Construction.LinkedTrieNodeModule.mergePriorities [static method]: System.Byte [] -> WoofWare.LiangHyphenation.Construction.LinkedTrieNode -> unit
 WoofWare.LiangHyphenation.Construction.PackedTrieBuilder inherit obj
 WoofWare.LiangHyphenation.Construction.PackedTrieBuilder..ctor [constructor]: unit
 WoofWare.LiangHyphenation.Construction.PackedTrieBuilder.AddException [method]: string -> unit
@@ -34,15 +35,22 @@ WoofWare.LiangHyphenation.Construction.PackedTrieBuilder.AddExceptions [method]:
 WoofWare.LiangHyphenation.Construction.PackedTrieBuilder.AddPattern [method]: string -> unit
 WoofWare.LiangHyphenation.Construction.PackedTrieBuilder.AddPatterns [method]: string seq -> unit
 WoofWare.LiangHyphenation.Construction.PackedTrieBuilder.Build [method]: unit -> WoofWare.LiangHyphenation.PackedTrie
+WoofWare.LiangHyphenation.Construction.ParsedPattern inherit System.ValueType, implements WoofWare.LiangHyphenation.Construction.ParsedPattern System.IEquatable, System.Collections.IStructuralEquatable, WoofWare.LiangHyphenation.Construction.ParsedPattern System.IComparable, System.IComparable, System.Collections.IStructuralComparable
+WoofWare.LiangHyphenation.Construction.ParsedPattern..ctor [constructor]: (char [], System.Byte [])
+WoofWare.LiangHyphenation.Construction.ParsedPattern.Chars [property]: [read-only] char []
+WoofWare.LiangHyphenation.Construction.ParsedPattern.Equals [method]: (WoofWare.LiangHyphenation.Construction.ParsedPattern, System.Collections.IEqualityComparer) -> bool
+WoofWare.LiangHyphenation.Construction.ParsedPattern.get_Chars [method]: unit -> char []
+WoofWare.LiangHyphenation.Construction.ParsedPattern.get_Priorities [method]: unit -> System.Byte []
+WoofWare.LiangHyphenation.Construction.ParsedPattern.Priorities [property]: [read-only] System.Byte []
 WoofWare.LiangHyphenation.Construction.Pattern inherit obj
 WoofWare.LiangHyphenation.Construction.Pattern.exceptionToPattern [static method]: string -> string
-WoofWare.LiangHyphenation.Construction.Pattern.parse [static method]: string -> struct (char * System.Byte) []
+WoofWare.LiangHyphenation.Construction.Pattern.parse [static method]: string -> WoofWare.LiangHyphenation.Construction.ParsedPattern
 WoofWare.LiangHyphenation.Construction.SuffixCompression inherit obj
 WoofWare.LiangHyphenation.Construction.SuffixCompression.compress [static method]: WoofWare.LiangHyphenation.Construction.LinkedTrieNode option -> System.Collections.Generic.Dictionary<WoofWare.LiangHyphenation.Construction.LinkedTrieNode, WoofWare.LiangHyphenation.Construction.LinkedTrieNode>
 WoofWare.LiangHyphenation.Construction.TriePacking inherit obj
 WoofWare.LiangHyphenation.Construction.TriePacking.collectNodesAndAlphabet [static method]: WoofWare.LiangHyphenation.Construction.LinkedTrieNode option -> (WoofWare.LiangHyphenation.Construction.LinkedTrieNode [] * int [])
 WoofWare.LiangHyphenation.Construction.TriePacking.countTransitions [static method]: WoofWare.LiangHyphenation.Construction.LinkedTrieNode -> int
-WoofWare.LiangHyphenation.Construction.TriePacking.enumerateTransitions [static method]: WoofWare.LiangHyphenation.Construction.LinkedTrieNode -> struct (char * System.Byte * WoofWare.LiangHyphenation.Construction.LinkedTrieNode) seq
+WoofWare.LiangHyphenation.Construction.TriePacking.enumerateTransitions [static method]: WoofWare.LiangHyphenation.Construction.LinkedTrieNode -> struct (char * WoofWare.LiangHyphenation.Construction.LinkedTrieNode) seq
 WoofWare.LiangHyphenation.Construction.TriePacking.pack [static method]: WoofWare.LiangHyphenation.Construction.LinkedTrieNode option -> int [] -> int -> WoofWare.LiangHyphenation.PackedTrie
 WoofWare.LiangHyphenation.Hyphenation inherit obj
 WoofWare.LiangHyphenation.Hyphenation.getHyphenationPoints [static method]: WoofWare.LiangHyphenation.PackedTrie -> string -> int []
@@ -59,7 +67,7 @@ WoofWare.LiangHyphenation.LanguageData.getResourceName [static method]: WoofWare
 WoofWare.LiangHyphenation.LanguageData.getResourceNameFragment [static method]: WoofWare.LiangHyphenation.KnownLanguage -> string
 WoofWare.LiangHyphenation.LanguageData.load [static method]: WoofWare.LiangHyphenation.KnownLanguage -> WoofWare.LiangHyphenation.PackedTrie
 WoofWare.LiangHyphenation.PackedTrie inherit obj, implements WoofWare.LiangHyphenation.PackedTrie System.IEquatable, System.Collections.IStructuralEquatable, WoofWare.LiangHyphenation.PackedTrie System.IComparable, System.IComparable, System.Collections.IStructuralComparable
-WoofWare.LiangHyphenation.PackedTrie..ctor [constructor]: (WoofWare.LiangHyphenation.PackedTrieEntry [], int [], int [], int)
+WoofWare.LiangHyphenation.PackedTrie..ctor [constructor]: (WoofWare.LiangHyphenation.PackedTrieEntry [], int [], int [], int, System.Byte [] option [])
 WoofWare.LiangHyphenation.PackedTrie.AlphabetSize [property]: [read-only] int
 WoofWare.LiangHyphenation.PackedTrie.Bases [property]: [read-only] int []
 WoofWare.LiangHyphenation.PackedTrie.CharMap [property]: [read-only] int []
@@ -69,25 +77,26 @@ WoofWare.LiangHyphenation.PackedTrie.get_AlphabetSize [method]: unit -> int
 WoofWare.LiangHyphenation.PackedTrie.get_Bases [method]: unit -> int []
 WoofWare.LiangHyphenation.PackedTrie.get_CharMap [method]: unit -> int []
 WoofWare.LiangHyphenation.PackedTrie.get_Data [method]: unit -> WoofWare.LiangHyphenation.PackedTrieEntry []
+WoofWare.LiangHyphenation.PackedTrie.get_PatternPriorities [method]: unit -> System.Byte [] option []
+WoofWare.LiangHyphenation.PackedTrie.PatternPriorities [property]: [read-only] System.Byte [] option []
 WoofWare.LiangHyphenation.PackedTrieEntry inherit System.ValueType, implements WoofWare.LiangHyphenation.PackedTrieEntry System.IEquatable, System.Collections.IStructuralEquatable, WoofWare.LiangHyphenation.PackedTrieEntry System.IComparable, System.IComparable, System.Collections.IStructuralComparable
-WoofWare.LiangHyphenation.PackedTrieEntry..ctor [constructor]: System.UInt64
+WoofWare.LiangHyphenation.PackedTrieEntry..ctor [constructor]: System.UInt32
 WoofWare.LiangHyphenation.PackedTrieEntry.Char [property]: [read-only] char
 WoofWare.LiangHyphenation.PackedTrieEntry.Empty [static property]: [read-only] WoofWare.LiangHyphenation.PackedTrieEntry
 WoofWare.LiangHyphenation.PackedTrieEntry.Equals [method]: (WoofWare.LiangHyphenation.PackedTrieEntry, System.Collections.IEqualityComparer) -> bool
 WoofWare.LiangHyphenation.PackedTrieEntry.get_Char [method]: unit -> char
 WoofWare.LiangHyphenation.PackedTrieEntry.get_Empty [static method]: unit -> WoofWare.LiangHyphenation.PackedTrieEntry
 WoofWare.LiangHyphenation.PackedTrieEntry.get_Link [method]: unit -> int
-WoofWare.LiangHyphenation.PackedTrieEntry.get_Priority [method]: unit -> System.Byte
-WoofWare.LiangHyphenation.PackedTrieEntry.get_Value [method]: unit -> System.UInt64
+WoofWare.LiangHyphenation.PackedTrieEntry.get_Value [method]: unit -> System.UInt32
 WoofWare.LiangHyphenation.PackedTrieEntry.Link [property]: [read-only] int
-WoofWare.LiangHyphenation.PackedTrieEntry.OfComponents [static method]: char -> System.Byte -> int -> WoofWare.LiangHyphenation.PackedTrieEntry
-WoofWare.LiangHyphenation.PackedTrieEntry.OfValue [static method]: System.UInt64 -> WoofWare.LiangHyphenation.PackedTrieEntry
-WoofWare.LiangHyphenation.PackedTrieEntry.Priority [property]: [read-only] System.Byte
-WoofWare.LiangHyphenation.PackedTrieEntry.Value [property]: [read-only] System.UInt64
+WoofWare.LiangHyphenation.PackedTrieEntry.OfComponents [static method]: char -> int -> WoofWare.LiangHyphenation.PackedTrieEntry
+WoofWare.LiangHyphenation.PackedTrieEntry.OfValue [static method]: System.UInt32 -> WoofWare.LiangHyphenation.PackedTrieEntry
+WoofWare.LiangHyphenation.PackedTrieEntry.Value [property]: [read-only] System.UInt32
 WoofWare.LiangHyphenation.PackedTrieModule inherit obj
 WoofWare.LiangHyphenation.PackedTrieModule.get_root [static method]: unit -> int
+WoofWare.LiangHyphenation.PackedTrieModule.getPatternPriorities [static method]: WoofWare.LiangHyphenation.PackedTrie -> int -> System.Byte [] option
 WoofWare.LiangHyphenation.PackedTrieModule.root [static property]: [read-only] int
-WoofWare.LiangHyphenation.PackedTrieModule.tryTransition [static method]: WoofWare.LiangHyphenation.PackedTrie -> int -> char -> struct (int * System.Byte) Microsoft.FSharp.Core.FSharpValueOption
+WoofWare.LiangHyphenation.PackedTrieModule.tryTransition [static method]: WoofWare.LiangHyphenation.PackedTrie -> int -> char -> int Microsoft.FSharp.Core.FSharpValueOption
 WoofWare.LiangHyphenation.PackedTrieSerialization inherit obj
 WoofWare.LiangHyphenation.PackedTrieSerialization.deserialize [static method]: System.Byte [] -> WoofWare.LiangHyphenation.PackedTrie
 WoofWare.LiangHyphenation.PackedTrieSerialization.loadFromEmbeddedResource [static method]: System.Reflection.Assembly -> string -> WoofWare.LiangHyphenation.PackedTrie
