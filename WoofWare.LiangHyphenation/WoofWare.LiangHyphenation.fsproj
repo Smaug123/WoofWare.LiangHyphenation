@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
@@ -20,6 +20,7 @@
   <ItemGroup>
     <Compile Include="Library.fs" />
     <EmbeddedResource Include="SurfaceBaseline.txt" />
+    <EmbeddedResource Include="version.json" />
 
     <None Include="..\README.md">
       <Pack>True</Pack>
