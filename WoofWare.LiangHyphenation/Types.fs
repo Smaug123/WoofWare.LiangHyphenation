@@ -18,48 +18,57 @@ type alphabetIndex
 /// - Bits 20-63: link to next state's base index
 [<Struct>]
 type PackedTrieEntry =
-    val Value: uint64
+    val Value : uint64
 
-    new(value: uint64) = { Value = value }
+    new (value : uint64)
+        =
+        {
+            Value = value
+        }
 
-    new(char: char, priority: byte, link: int<trieState>) =
+    new (char : char, priority : byte, link : int<trieState>)
+        =
         let charBits = uint64 (uint16 char)
         let priorityBits = (uint64 priority &&& 0xFUL) <<< 16
         let linkBits = (uint64 (int link) &&& 0xFFFFFFFFFFFUL) <<< 20
-        { Value = charBits ||| priorityBits ||| linkBits }
 
-    member inline this.Char: char = char (uint16 (this.Value &&& 0xFFFFUL))
-    member inline this.Priority: byte = byte ((this.Value >>> 16) &&& 0xFUL)
+        {
+            Value = charBits ||| priorityBits ||| linkBits
+        }
 
-    member inline this.Link: int<trieState> =
-        LanguagePrimitives.Int32WithMeasure(int (this.Value >>> 20))
+    member inline this.Char : char = char (uint16 (this.Value &&& 0xFFFFUL))
+    member inline this.Priority : byte = byte ((this.Value >>> 16) &&& 0xFUL)
 
-    static member Empty = PackedTrieEntry(0UL)
+    member inline this.Link : int<trieState> =
+        LanguagePrimitives.Int32WithMeasure (int (this.Value >>> 20))
+
+    static member Empty = PackedTrieEntry (0UL)
 
 /// The packed trie data structure for efficient pattern matching.
 type PackedTrie =
     {
         /// The packed array of transitions (indexed by base + alphabetIndex)
-        Data: PackedTrieEntry array
+        Data : PackedTrieEntry array
         /// Base index in Data for each state (state 0 is root)
-        Bases: int<trieIndex> array
+        Bases : int<trieIndex> array
         /// Character-to-index mapping for the alphabet (-1 means not in alphabet)
-        CharMap: int<alphabetIndex> array
+        CharMap : int<alphabetIndex> array
         /// Size of the dense alphabet
-        AlphabetSize: int<alphabetIndex>
+        AlphabetSize : int<alphabetIndex>
     }
 
 [<RequireQualifiedAccess>]
 module PackedTrie =
     /// The root state
-    let root: int<trieState> = 0<trieState>
+    let root : int<trieState> = 0<trieState>
 
     /// Try to transition from a state on a character
     let inline tryTransition
-        (trie: PackedTrie)
-        (state: int<trieState>)
-        (c: char)
-        : struct (int<trieState> * byte) voption =
+        (trie : PackedTrie)
+        (state : int<trieState>)
+        (c : char)
+        : struct (int<trieState> * byte) voption
+        =
         let charIdx = trie.CharMap.[int c]
 
         if charIdx < 0<alphabetIndex> then
@@ -74,6 +83,6 @@ module PackedTrie =
                 let entry = trie.Data.[slot]
 
                 if entry.Char = c then
-                    ValueSome(struct (entry.Link, entry.Priority))
+                    ValueSome (struct (entry.Link, entry.Priority))
                 else
                     ValueNone

@@ -11,11 +11,11 @@ module internal Tracing =
     let private debugEnabled =
         match Environment.GetEnvironmentVariable "WOOFWARE_LIANG_HYPHENATION_DEBUG" with
         | null -> false
-        | s -> s = "1" || String.Equals(s, "true", StringComparison.OrdinalIgnoreCase)
+        | s -> s = "1" || String.Equals (s, "true", StringComparison.OrdinalIgnoreCase)
 
-    let inline trace (msgFn: unit -> string) =
+    let inline trace (msgFn : unit -> string) =
         if debugEnabled then
-            Console.Error.WriteLine(msgFn ())
+            Console.Error.WriteLine (msgFn ())
 #else
-    let inline trace (_msgFn: unit -> string) = ()
+    let inline trace (_msgFn : unit -> string) = ()
 #endif

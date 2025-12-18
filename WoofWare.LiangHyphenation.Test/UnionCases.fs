@@ -18,7 +18,7 @@ module UnionCases =
 
         cases
         |> Array.map (fun case ->
-            let fields = case.GetFields()
+            let fields = case.GetFields ()
 
             if fields.Length > 0 then
                 failwithf
@@ -27,5 +27,6 @@ module UnionCases =
                     case.Name
                     fields.Length
 
-            FSharpValue.MakeUnion(case, [||]) :?> 'a)
+            FSharpValue.MakeUnion (case, [||]) :?> 'a
+        )
         |> Array.toList

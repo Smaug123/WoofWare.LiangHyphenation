@@ -11,9 +11,9 @@ module TestHyphenation =
     [<Test>]
     let ``Simple pattern produces expected hyphenation`` () =
         // Pattern "1a" means priority 1 before 'a'
-        let builder = PackedTrieBuilder()
-        builder.AddPattern("1a")
-        let trie = builder.Build()
+        let builder = PackedTrieBuilder ()
+        builder.AddPattern ("1a")
+        let trie = builder.Build ()
 
         // For word "aa", extended is ".aa."
         // At position 1 (the 'a' in ".aa."), we should see priority 1

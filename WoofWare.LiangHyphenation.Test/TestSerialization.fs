@@ -15,8 +15,11 @@ module TestSerialization =
     let private patternsResourceName =
         "WoofWare.LiangHyphenation.Test.Patterns.hyph-en-gb.pat.txt"
 
+    let private exceptionsResourceName =
+        "WoofWare.LiangHyphenation.Test.Patterns.hyph-en-gb.hyp.txt"
+
     let private embeddedResourcePath =
-        Path.Combine(
+        Path.Combine (
             FileInfo(__SOURCE_DIRECTORY__).Directory.FullName,
             "WoofWare.LiangHyphenation",
             "Data",
@@ -24,45 +27,52 @@ module TestSerialization =
         )
 
     /// Load patterns from an embedded resource text file (one pattern per line).
-    let private loadPatternsFromResource (assembly: Assembly) (resourceName: string) : string seq =
-        use stream = assembly.GetManifestResourceStream(resourceName)
+    let private loadPatternsFromResource (assembly : Assembly) (resourceName : string) : string seq =
+        use stream = assembly.GetManifestResourceStream (resourceName)
 
         if isNull stream then
-            let available = assembly.GetManifestResourceNames() |> String.concat ", "
+            let available = assembly.GetManifestResourceNames () |> String.concat ", "
             failwith $"Embedded resource '%s{resourceName}' not found. Available: %s{available}"
 
-        use reader = new StreamReader(stream)
-        let patterns = ResizeArray<string>()
-        let mutable line = reader.ReadLine()
+        use reader = new StreamReader (stream)
+        let patterns = ResizeArray<string> ()
+        let mutable line = reader.ReadLine ()
 
         while not (isNull line) do
-            let trimmed = line.Trim()
+            let trimmed = line.Trim ()
 
             if trimmed.Length > 0 then
-                patterns.Add(trimmed)
+                patterns.Add (trimmed)
 
-            line <- reader.ReadLine()
+            line <- reader.ReadLine ()
 
         patterns :> _
 
     /// Get the patterns used to build the packed trie.
     let private getPatterns () : string seq =
-        let assembly = Assembly.GetExecutingAssembly()
+        let assembly = Assembly.GetExecutingAssembly ()
         loadPatternsFromResource assembly patternsResourceName
 
-    /// Build a PackedTrie from the canonical pattern source.
+    /// Get the exceptions used to build the packed trie.
+    let private getExceptions () : string seq =
+        let assembly = Assembly.GetExecutingAssembly ()
+        loadPatternsFromResource assembly exceptionsResourceName
+
+    /// Build a PackedTrie from the canonical pattern and exception sources.
     let private buildPackedTrie () : PackedTrie =
         let patterns = getPatterns ()
-        let builder = PackedTrieBuilder()
-        builder.AddPatterns(patterns)
-        builder.Build()
+        let exceptions = getExceptions ()
+        let builder = PackedTrieBuilder ()
+        builder.AddPatterns (patterns)
+        builder.AddExceptions (exceptions)
+        builder.Build ()
 
     [<Test>]
     [<Explicit("Run this test to regenerate the embedded resource file")>]
     let ``Regenerate embedded resource`` () =
         let trie = buildPackedTrie ()
         let bytes = PackedTrieSerialization.serialize trie
-        File.WriteAllBytes(embeddedResourcePath, bytes)
+        File.WriteAllBytes (embeddedResourcePath, bytes)
         printfn $"Wrote %d{bytes.Length} bytes to %s{embeddedResourcePath}"
 
     [<Test>]
@@ -70,7 +80,7 @@ module TestSerialization =
         let trie = buildPackedTrie ()
         let freshBytes = PackedTrieSerialization.serialize trie
 
-        let existingBytes = File.ReadAllBytes(embeddedResourcePath)
+        let existingBytes = File.ReadAllBytes (embeddedResourcePath)
 
         if freshBytes <> existingBytes then
             failwith
@@ -79,9 +89,9 @@ module TestSerialization =
     [<Test>]
     let ``Serialization round-trips correctly`` () =
         // Build a trie from some test patterns
-        let builder = PackedTrieBuilder()
-        builder.AddPatterns([ ".hy3p"; "4ab1c"; "1a"; "tion5" ])
-        let original = builder.Build()
+        let builder = PackedTrieBuilder ()
+        builder.AddPatterns ([ ".hy3p" ; "4ab1c" ; "1a" ; "tion5" ])
+        let original = builder.Build ()
 
         // Serialize and deserialize
         let bytes = PackedTrieSerialization.serialize original
@@ -104,16 +114,16 @@ module TestSerialization =
     [<Test>]
     let ``Deserialized trie produces same hyphenation as original`` () =
         // Build a trie from some test patterns
-        let builder = PackedTrieBuilder()
-        builder.AddPatterns([ ".hy3p"; "4ab1c"; "1a"; "tion5"; "ex1am3ple" ])
-        let original = builder.Build()
+        let builder = PackedTrieBuilder ()
+        builder.AddPatterns ([ ".hy3p" ; "4ab1c" ; "1a" ; "tion5" ; "ex1am3ple" ])
+        let original = builder.Build ()
 
         // Serialize and deserialize
         let bytes = PackedTrieSerialization.serialize original
         let roundTripped = PackedTrieSerialization.deserialize bytes
 
         // Test hyphenation with various words
-        let testWords = [ "hyphenation"; "example"; "action"; "abc"; "hello" ]
+        let testWords = [ "hyphenation" ; "example" ; "action" ; "abc" ; "hello" ]
 
         for word in testWords do
             let originalResult = Hyphenation.hyphenate original word
@@ -123,7 +133,7 @@ module TestSerialization =
     let cases = UnionCases.all<KnownLanguage> ()
 
     [<TestCaseSource(nameof cases)>]
-    let ``Can load language data`` (language: KnownLanguage) =
+    let ``Can load language data`` (language : KnownLanguage) =
         let trie = LanguageData.load language
         trie.Data |> shouldNotEqual null
         trie.Bases |> shouldNotEqual null

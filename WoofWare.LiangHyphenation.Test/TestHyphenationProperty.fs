@@ -17,13 +17,16 @@ module NaiveTrie =
     type NaiveTrieNode =
         {
             /// Transitions: char -> (priority at this transition, child node)
-            Children: Map<char, byte * NaiveTrieNode>
+            Children : Map<char, byte * NaiveTrieNode>
         }
 
-    let empty: NaiveTrieNode = { Children = Map.empty }
+    let empty : NaiveTrieNode =
+        {
+            Children = Map.empty
+        }
 
     /// Insert a parsed pattern into the naive trie
-    let rec insert (pattern: struct (char * byte) array) (index: int) (node: NaiveTrieNode) : NaiveTrieNode =
+    let rec insert (pattern : struct (char * byte) array) (index : int) (node : NaiveTrieNode) : NaiveTrieNode =
         if index >= pattern.Length then
             node
         else
@@ -31,33 +34,34 @@ module NaiveTrie =
 
             let existingPriority, child =
                 match Map.tryFind c node.Children with
-                | Some(p, child) -> (max p priority, child)
+                | Some (p, child) -> (max p priority, child)
                 | None -> (priority, empty)
 
             let newChild = insert pattern (index + 1) child
 
             { node with
-                Children = Map.add c (existingPriority, newChild) node.Children }
+                Children = Map.add c (existingPriority, newChild) node.Children
+            }
 
     /// Build a naive trie from patterns
-    let build (patterns: string seq) : NaiveTrieNode =
+    let build (patterns : string seq) : NaiveTrieNode =
         patterns
         |> Seq.map Pattern.parse
         |> Seq.fold (fun node pattern -> insert pattern 0 node) empty
 
     /// Try to transition in the naive trie
-    let tryTransition (node: NaiveTrieNode) (c: char) : struct (byte * NaiveTrieNode) voption =
+    let tryTransition (node : NaiveTrieNode) (c : char) : struct (byte * NaiveTrieNode) voption =
         match Map.tryFind c node.Children with
-        | Some(priority, child) -> ValueSome(struct (priority, child))
+        | Some (priority, child) -> ValueSome (struct (priority, child))
         | None -> ValueNone
 
     /// Hyphenate using the naive trie (reference implementation)
-    let hyphenate (trie: NaiveTrieNode) (word: string) : byte array =
+    let hyphenate (trie : NaiveTrieNode) (word : string) : byte array =
         if word.Length < 2 then
             [||]
         else
             let priorities = Array.zeroCreate<byte> (word.Length - 1)
-            let extended = "." + word.ToLowerInvariant() + "."
+            let extended = "." + word.ToLowerInvariant () + "."
 
             for start = 0 to extended.Length - 1 do
                 let mutable node = trie
@@ -68,8 +72,8 @@ module NaiveTrie =
                     let c = extended.[pos]
 
                     match tryTransition node c with
-                    | ValueSome(struct (priority, nextNode)) ->
-                        let interLetterPos = start + (pos - start) - 1
+                    | ValueSome (struct (priority, nextNode)) ->
+                        let interLetterPos = pos - 2
 
                         if interLetterPos >= 0 && interLetterPos < priorities.Length then
                             if priority > priorities.[interLetterPos] then
@@ -87,41 +91,41 @@ module NaiveTrie =
 
 module Generators =
     /// Generate a valid Liang pattern character (lowercase letter or '.')
-    let patternChar: Gen<char> =
-        Gen.frequency [ (26, Gen.choose (int 'a', int 'z') |> Gen.map char); (1, Gen.constant '.') ]
+    let patternChar : Gen<char> =
+        Gen.frequency [ (26, Gen.choose (int 'a', int 'z') |> Gen.map char) ; (1, Gen.constant '.') ]
 
     /// Generate a valid priority digit (0-9)
-    let priorityDigit: Gen<char> = Gen.choose (int '0', int '9') |> Gen.map char
+    let priorityDigit : Gen<char> = Gen.choose (int '0', int '9') |> Gen.map char
 
     /// Generate a valid Liang hyphenation pattern
     /// Format: optional digit, then (char, optional digit)+
-    let validPattern: Gen<string> =
+    let validPattern : Gen<string> =
         gen {
             let! leadingDigit = Gen.optionOf priorityDigit
             let! charCount = Gen.choose (1, 8)
             let! chars = Gen.listOfLength charCount patternChar
             let! trailingDigits = Gen.listOfLength charCount (Gen.optionOf priorityDigit)
 
-            let sb = System.Text.StringBuilder()
+            let sb = System.Text.StringBuilder ()
             leadingDigit |> Option.iter (sb.Append >> ignore)
 
             for i = 0 to chars.Length - 1 do
-                sb.Append(chars.[i]) |> ignore
+                sb.Append (chars.[i]) |> ignore
                 trailingDigits.[i] |> Option.iter (sb.Append >> ignore)
 
-            return sb.ToString()
+            return sb.ToString ()
         }
 
     /// Generate a lowercase word for hyphenation testing
-    let lowercaseWord: Gen<string> =
+    let lowercaseWord : Gen<string> =
         gen {
             let! length = Gen.choose (1, 15)
             let! chars = Gen.listOfLength length (Gen.choose (int 'a', int 'z') |> Gen.map char)
-            return String(chars |> List.toArray)
+            return String (chars |> List.toArray)
         }
 
     /// Generate a list of valid patterns
-    let patternList: Gen<string list> =
+    let patternList : Gen<string list> =
         Gen.listOf validPattern |> Gen.map (List.truncate 50)
 
 // ============================================================================
@@ -133,21 +137,23 @@ module PropertyTests =
 
     let config =
         Config.QuickThrowOnFailure.WithMaxTest(10000).WithQuietOnSuccess(true).WithParallelRunConfig
-            { MaxDegreeOfParallelism = max 1 (Environment.ProcessorCount / 2) }
+            {
+                MaxDegreeOfParallelism = max 1 (Environment.ProcessorCount / 2)
+            }
 
     [<Test>]
     let ``Packed trie matches naive trie for hyphenation`` () =
         let mutable nonZeroCount = 0
         let mutable zeroCount = 0
 
-        let property (patterns: string list) (word: string) =
+        let property (patterns : string list) (word : string) =
             // Build both tries
             let naiveTrie = NaiveTrie.build patterns
 
             let packedTrie =
-                let builder = PackedTrieBuilder()
-                builder.AddPatterns(patterns)
-                builder.Build()
+                let builder = PackedTrieBuilder ()
+                builder.AddPatterns (patterns)
+                builder.Build ()
 
             // Hyphenate with both
             let naiveResult = NaiveTrie.hyphenate naiveTrie word
@@ -164,18 +170,18 @@ module PropertyTests =
 
         let gen = Gen.zip Generators.patternList Generators.lowercaseWord |> Arb.fromGen
 
-        Check.One(config, Prop.forAll gen (fun (patterns, word) -> property patterns word))
+        Check.One (config, Prop.forAll gen (fun (patterns, word) -> property patterns word))
 
         // Verify we hit interesting cases
         printfn $"Distribution: %d{nonZeroCount} non-zero, %d{zeroCount} zero"
 
     [<Test>]
     let ``Hyphenation points are within bounds`` () =
-        let property (patterns: string list) (word: string) =
+        let property (patterns : string list) (word : string) =
             let packedTrie =
-                let builder = PackedTrieBuilder()
-                builder.AddPatterns(patterns)
-                builder.Build()
+                let builder = PackedTrieBuilder ()
+                builder.AddPatterns patterns
+                builder.Build ()
 
             let points = Hyphenation.getHyphenationPoints packedTrie word
 
@@ -189,15 +195,15 @@ module PropertyTests =
 
         let gen = Gen.zip Generators.patternList Generators.lowercaseWord |> Arb.fromGen
 
-        Check.One(config, Prop.forAll gen (fun (patterns, word) -> property patterns word))
+        Check.One (config, Prop.forAll gen (fun (patterns, word) -> property patterns word))
 
     [<Test>]
     let ``Hyphenation is deterministic`` () =
-        let property (patterns: string list) (word: string) =
+        let property (patterns : string list) (word : string) =
             let packedTrie =
-                let builder = PackedTrieBuilder()
-                builder.AddPatterns(patterns)
-                builder.Build()
+                let builder = PackedTrieBuilder ()
+                builder.AddPatterns (patterns)
+                builder.Build ()
 
             let result1 = Hyphenation.hyphenate packedTrie word
             let result2 = Hyphenation.hyphenate packedTrie word
@@ -206,28 +212,28 @@ module PropertyTests =
 
         let gen = Gen.zip Generators.patternList Generators.lowercaseWord |> Arb.fromGen
 
-        Check.One(config, Prop.forAll gen (fun (patterns, word) -> property patterns word))
+        Check.One (config, Prop.forAll gen (fun (patterns, word) -> property patterns word))
 
     [<Test>]
     let ``Empty pattern set produces no hyphenation`` () =
-        let property (word: string) =
+        let property (word : string) =
             let packedTrie =
-                let builder = PackedTrieBuilder()
-                builder.Build()
+                let builder = PackedTrieBuilder ()
+                builder.Build ()
 
             let points = Hyphenation.getHyphenationPoints packedTrie word
             points.Length |> shouldEqual 0
 
         let gen = Generators.lowercaseWord |> Arb.fromGen
-        Check.One(config, Prop.forAll gen property)
+        Check.One (config, Prop.forAll gen property)
 
     [<Test>]
     let ``Short words have no hyphenation points`` () =
-        let property (patterns: string list) =
+        let property (patterns : string list) =
             let packedTrie =
-                let builder = PackedTrieBuilder()
-                builder.AddPatterns(patterns)
-                builder.Build()
+                let builder = PackedTrieBuilder ()
+                builder.AddPatterns (patterns)
+                builder.Build ()
 
             // Words of length 0 or 1 should have no hyphenation points
             let emptyPoints = Hyphenation.getHyphenationPoints packedTrie ""
@@ -237,27 +243,27 @@ module PropertyTests =
             singleCharPoints.Length |> shouldEqual 0
 
         let gen = Generators.patternList |> Arb.fromGen
-        Check.One(config, Prop.forAll gen property)
+        Check.One (config, Prop.forAll gen property)
 
     [<Test>]
     let ``Regression: patterns with shared substrings`` () =
         // This test case found a bug where the root state was incorrectly defined
-        let patterns = [ "9e5q7z1a8"; "4o6e3e5nw1u0i9e0"; "6c0f1l5xb6o7" ]
+        let patterns = [ "9e5q7z1a8" ; "4o6e3e5nw1u0i9e0" ; "6c0f1l5xb6o7" ]
         let word = "ulnrqvjd"
 
         let naiveTrie = NaiveTrie.build patterns
 
         let packedTrie =
-            let builder = PackedTrieBuilder()
-            builder.AddPatterns(patterns)
-            builder.Build()
+            let builder = PackedTrieBuilder ()
+            builder.AddPatterns (patterns)
+            builder.Build ()
 
         let naiveResult = NaiveTrie.hyphenate naiveTrie word
         let packedResult = Hyphenation.hyphenate packedTrie word
 
         packedResult |> shouldEqual naiveResult
         // Word has no matching patterns, so all priorities should be 0
-        packedResult |> shouldEqual [| 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy |]
+        packedResult |> shouldEqual [| 0uy ; 0uy ; 0uy ; 0uy ; 0uy ; 0uy ; 0uy |]
 
 // ============================================================================
 // Position Correctness Tests (independent of reference implementation)
@@ -266,17 +272,16 @@ module PropertyTests =
 [<TestFixture>]
 module PositionCorrectnessTests =
 
-    let config =
-        Config.QuickThrowOnFailure.WithMaxTest(1000).WithQuietOnSuccess(true)
+    let config = Config.QuickThrowOnFailure.WithMaxTest(1000).WithQuietOnSuccess (true)
 
     /// Generate a lowercase letter
-    let lowercaseLetter: Gen<char> = Gen.choose (int 'a', int 'z') |> Gen.map char
+    let lowercaseLetter : Gen<char> = Gen.choose (int 'a', int 'z') |> Gen.map char
 
     /// Generate an odd priority (1, 3, 5, 7, 9) - these create hyphenation points
-    let oddPriority: Gen<int> = Gen.elements [ 1; 3; 5; 7; 9 ]
+    let oddPriority : Gen<int> = Gen.elements [ 1 ; 3 ; 5 ; 7 ; 9 ]
 
     /// Generate two distinct lowercase letters
-    let twoDistinctLetters: Gen<char * char> =
+    let twoDistinctLetters : Gen<char * char> =
         gen {
             let! a = lowercaseLetter
             let! b = lowercaseLetter |> Gen.filter (fun c -> c <> a)
@@ -284,7 +289,7 @@ module PositionCorrectnessTests =
         }
 
     /// Generate three distinct lowercase letters
-    let threeDistinctLetters: Gen<char * char * char> =
+    let threeDistinctLetters : Gen<char * char * char> =
         gen {
             let! a = lowercaseLetter
             let! b = lowercaseLetter |> Gen.filter (fun c -> c <> a)
@@ -297,14 +302,14 @@ module PositionCorrectnessTests =
         // Pattern "{p}{x}" means "priority p before letter x"
         // When matching at word start, this priority applies BEFORE the word boundary
         // and should NOT create a hyphenation point inside the word
-        let property (x: char, y: char) (p: int) =
+        let property (x : char, y : char) (p : int) =
             let pattern = $"%d{p}%c{x}"
             let word = $"%c{x}%c{y}"
 
             let packedTrie =
-                let builder = PackedTrieBuilder()
-                builder.AddPattern(pattern)
-                builder.Build()
+                let builder = PackedTrieBuilder ()
+                builder.AddPattern (pattern)
+                builder.Build ()
 
             let points = Hyphenation.getHyphenationPoints packedTrie word
 
@@ -313,20 +318,20 @@ module PositionCorrectnessTests =
             points.Length |> shouldEqual 0
 
         let gen = Gen.zip twoDistinctLetters oddPriority |> Arb.fromGen
-        Check.One(config, Prop.forAll gen (fun ((x, y), p) -> property (x, y) p))
+        Check.One (config, Prop.forAll gen (fun ((x, y), p) -> property (x, y) p))
 
     [<Test>]
     let ``Property 2: Pattern with word-start marker positions priority correctly`` () =
         // Pattern ".{x}1{y}" should create a hyphenation point between x and y
         // when the word is "{x}{y}" (matched at word start)
-        let property (x: char, y: char) =
+        let property (x : char, y : char) =
             let pattern = $".%c{x}1%c{y}"
             let word = $"%c{x}%c{y}"
 
             let packedTrie =
-                let builder = PackedTrieBuilder()
-                builder.AddPattern(pattern)
-                builder.Build()
+                let builder = PackedTrieBuilder ()
+                builder.AddPattern (pattern)
+                builder.Build ()
 
             let points = Hyphenation.getHyphenationPoints packedTrie word
 
@@ -334,21 +339,21 @@ module PositionCorrectnessTests =
             points |> shouldEqual [| 0 |]
 
         let gen = twoDistinctLetters |> Arb.fromGen
-        Check.One(config, Prop.forAll gen property)
+        Check.One (config, Prop.forAll gen property)
 
     [<Test>]
     let ``Property 3: Mid-word pattern positions priority correctly`` () =
         // Pattern "{a}1{b}{c}" means priority 1 between a and b
         // When matching "x{a}{b}{c}" (where x is a prefix letter), the hyphenation
         // point should be between a and b (position 1), not shifted elsewhere
-        let property (prefix: char, a: char, b: char, c: char) =
+        let property (prefix : char, a : char, b : char, c : char) =
             let pattern = $"%c{a}1%c{b}%c{c}"
             let word = $"%c{prefix}%c{a}%c{b}%c{c}"
 
             let packedTrie =
-                let builder = PackedTrieBuilder()
-                builder.AddPattern(pattern)
-                builder.Build()
+                let builder = PackedTrieBuilder ()
+                builder.AddPattern (pattern)
+                builder.Build ()
 
             let points = Hyphenation.getHyphenationPoints packedTrie word
 
@@ -366,4 +371,4 @@ module PositionCorrectnessTests =
             }
             |> Arb.fromGen
 
-        Check.One(config, Prop.forAll gen property)
+        Check.One (config, Prop.forAll gen property)
