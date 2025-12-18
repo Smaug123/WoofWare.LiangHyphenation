@@ -12,8 +12,17 @@
 
 The Liang hyphenation algorithm.
 
-Status: unimplemented.
+# Structure
+
+The library provides two namespaces: `WoofWare.LiangHyphenation`, which contains functions for performing hyphenation,
+and `WoofWare.LiangHyphenation.Construction`, which contains functions for manipulating and creating the efficient data structures holding hyphenation data.
+
+As a consumer, using hyphenation out of the box, you should simply call methods from `WoofWare.LiangHyphenation`'s `Hyphenation` module.
 
 # Licence
+
+The patterns defining hyphenation patterns are derived from the [hyph-utf8 package](https://ctan.org/pkg/hyph-utf8?lang=en), and are in [WoofWare.LiangHyphenation.Test/Patterns](./WoofWare.LiangHyphenation.Test/Patterns).
+The text files which we consume are a bit unclear about the licenses which apply to them; I've taken them to be MIT licensed just as are the `.tex` files defining the same patterns.
+Copies can be found in the [LICENSES](./LICENSES/) folder.
 
 WoofWare.LiangHyphenation is licenced to you under the MIT licence; see [LICENSE.md](./LICENSE.md).

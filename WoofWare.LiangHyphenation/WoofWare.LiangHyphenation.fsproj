@@ -18,8 +18,17 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Library.fs" />
+    <Compile Include="Tracing.fs" />
+    <Compile Include="Types.fs" />
+    <Compile Include="LinkedTrie.fs" />
+    <Compile Include="Pattern.fs" />
+    <Compile Include="SuffixCompression.fs" />
+    <Compile Include="TriePacking.fs" />
+    <Compile Include="Hyphenation.fs" />
+    <Compile Include="Serialization.fs" />
+    <Compile Include="PackedTrieBuilder.fs" />
     <EmbeddedResource Include="SurfaceBaseline.txt" />
+    <EmbeddedResource Include="version.json" />
 
     <None Include="..\README.md">
       <Pack>True</Pack>
@@ -29,6 +38,7 @@
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>
+    <EmbeddedResource Include="Data\*.bin" />
   </ItemGroup>
 
 </Project>
