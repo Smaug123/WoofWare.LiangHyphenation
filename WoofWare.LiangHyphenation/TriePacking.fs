@@ -84,8 +84,11 @@ module TriePacking =
 
             let stateCount = int nextState
 
-            // Sort nodes by transition count (descending) for better packing
-            let sortedNodes = nodes |> Array.sortByDescending countTransitions
+            // Precompute transitions and sort by count (descending) for better packing
+            let sortedNodesWithTransitions =
+                nodes
+                |> Array.map (fun n -> n, enumerateTransitions n |> Seq.toArray)
+                |> Array.sortByDescending (fun (_, t) -> t.Length)
 
             // Packing state
             let mutable dataSize = stateCount * alphabetSize // Initial estimate
@@ -104,30 +107,36 @@ module TriePacking =
                     Array.blit data 0 newData 0 data.Length
                     data <- newData
 
+            // Track minimum possibly-free base to avoid re-scanning used bases
+            let mutable searchStartBase = 0
+
             // Pack each node
-            for node in sortedNodes do
+            for node, transitions in sortedNodesWithTransitions do
                 let stateId = nodeToState.[node]
-                let transitions = enumerateTransitions node |> Seq.toArray
 
                 // Store pattern priorities if this is a pattern-end node
                 patternPriorities.[int stateId] <- node.PatternPriorities
 
                 if transitions.Length = 0 then
                     // No transitions - just need a valid base that's not used
-                    let mutable baseIdx = 0
+                    let mutable baseIdx = searchStartBase
 
-                    while usedBases.Contains (baseIdx) do
+                    while usedBases.Contains baseIdx do
                         baseIdx <- baseIdx + 1
 
-                    usedBases.Add (baseIdx) |> ignore
+                    usedBases.Add baseIdx |> ignore
                     bases.[int stateId] <- LanguagePrimitives.Int32WithMeasure baseIdx
+
+                    // Advance search start past known-used bases
+                    while usedBases.Contains searchStartBase do
+                        searchStartBase <- searchStartBase + 1
                 else
                     // Find a base where all transitions fit
-                    let mutable baseIdx = 0
+                    let mutable baseIdx = searchStartBase
                     let mutable found = false
 
                     while not found do
-                        if usedBases.Contains (baseIdx) then
+                        if usedBases.Contains baseIdx then
                             baseIdx <- baseIdx + 1
                         else
                             // Check if all transitions fit
@@ -137,13 +146,13 @@ module TriePacking =
                                 let charIdx = int charMap.[int c]
                                 let slot = baseIdx + charIdx
 
-                                if occupied.Contains (slot) then
+                                if occupied.Contains slot then
                                     fits <- false
 
                             if fits then found <- true else baseIdx <- baseIdx + 1
 
                     // Place transitions at this base
-                    usedBases.Add (baseIdx) |> ignore
+                    usedBases.Add baseIdx |> ignore
                     bases.[int stateId] <- LanguagePrimitives.Int32WithMeasure baseIdx
 
                     for struct (c, childNode) in transitions do
@@ -152,7 +161,11 @@ module TriePacking =
                         ensureCapacity (slot + 1)
                         let childState = nodeToState.[childNode]
                         data.[slot] <- PackedTrieEntry.OfComponents c childState
-                        occupied.Add (slot) |> ignore
+                        occupied.Add slot |> ignore
+
+                    // Advance search start past known-used bases
+                    while usedBases.Contains searchStartBase do
+                        searchStartBase <- searchStartBase + 1
 
             // Trim data array
             let maxUsed = if occupied.Count = 0 then 0 else (occupied |> Seq.max) + 1
