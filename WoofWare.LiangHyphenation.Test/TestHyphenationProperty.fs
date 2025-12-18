@@ -390,3 +390,29 @@ module PositionCorrectnessTests =
             |> Arb.fromGen
 
         Check.One (FsCheckConfig.config, Prop.forAll gen property)
+
+    [<Test>]
+    let ``Property 4: Trailing priority positions correctly`` () =
+        // Pattern ".{a}{b}{p}" has trailing priority p that should affect
+        // the position after 'b' in word "{a}{b}{c}"
+        let property (a : char, b : char, c : char) (p : int) =
+            let pattern = $".%c{a}%c{b}%d{p}"
+            let word = $"%c{a}%c{b}%c{c}"
+
+            let packedTrie =
+                let builder = PackedTrieBuilder ()
+                builder.AddPattern pattern
+                builder.Build ()
+
+            let result = Hyphenation.hyphenate packedTrie word
+
+            // Word "{a}{b}{c}" has 2 inter-letter positions:
+            // Position 0: between a and b
+            // Position 1: between b and c
+            // Trailing priority p should appear at position 1
+            result.Length |> shouldEqual 2
+            result.[0] |> shouldEqual 0uy
+            result.[1] |> shouldEqual (byte p)
+
+        let gen = Gen.zip threeDistinctLetters (Gen.choose (1, 9)) |> Arb.fromGen
+        Check.One (FsCheckConfig.config, Prop.forAll gen (fun ((a, b, c), p) -> property (a, b, c) p))
