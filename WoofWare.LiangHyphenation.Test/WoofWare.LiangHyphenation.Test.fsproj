@@ -7,11 +7,25 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Object.fs" />
+    <Compile Include="UnionCases.fs" />
+    <Compile Include="FsCheck.fs" />
+    <Compile Include="TestHyphenationProperty.fs" />
+    <Compile Include="TestSuffixCompression.fs" />
+    <Compile Include="TestHyphenation.fs" />
+    <Compile Include="TestIntegration.fs" />
+    <Compile Include="TestTrieBuilder.fs" />
+    <Compile Include="TestPatternParsing.fs" />
+    <Compile Include="TestSerialization.fs" />
     <Compile Include="TestSurface.fs" />
+    <EmbeddedResource Include="Patterns/*.txt" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="ApiSurface" Version="5.0.3" />
+    <PackageReference Include="FsCheck" Version="3.3.2" />
+    <PackageReference Include="FsUnit" Version="7.1.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
     <PackageReference Include="NUnit" Version="4.4.0" />
     <PackageReference Include="NUnit3TestAdapter" Version="6.0.0" />
     <PackageReference Include="WoofWare.Expect" Version="0.8.5" />

@@ -5,7 +5,7 @@ open ApiSurface
 
 [<TestFixture>]
 module TestSurface =
-    let assembly = typeof<WoofWare.LiangHyphenation.Foo>.Assembly
+    let assembly = typeof<WoofWare.LiangHyphenation.PackedTrie>.Assembly
 
     [<Test>]
     let ``Ensure API surface has not been modified`` () = ApiSurface.assertIdentical assembly

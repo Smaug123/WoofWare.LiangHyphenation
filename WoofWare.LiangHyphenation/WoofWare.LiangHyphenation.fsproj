@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
@@ -18,7 +18,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Library.fs" />
+    <Compile Include="Tracing.fs" />
+    <Compile Include="Object.fs" />
+    <Compile Include="Types.fs" />
+    <Compile Include="Pattern.fs" />
+    <Compile Include="LinkedTrie.fs" />
+    <Compile Include="SuffixCompression.fs" />
+    <Compile Include="TriePacking.fs" />
+    <Compile Include="Hyphenation.fs" />
+    <Compile Include="Serialization.fs" />
+    <Compile Include="PackedTrieBuilder.fs" />
     <EmbeddedResource Include="SurfaceBaseline.txt" />
     <EmbeddedResource Include="version.json" />
 
@@ -30,6 +39,7 @@
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>
+    <EmbeddedResource Include="Data\*.bin" />
   </ItemGroup>
 
 </Project>
