@@ -18,16 +18,19 @@ type alphabetIndex
 /// - Bits 20-63: link to next state's base index
 [<Struct>]
 type PackedTrieEntry =
-    val Value : uint64
+    {
+        /// The raw 64-bit packed representation.
+        Value : uint64
+    }
 
-    new (value : uint64)
-        =
+    /// Construct from a raw 64-bit packed value.
+    static member OfValue (value : uint64) =
         {
             Value = value
         }
 
-    new (char : char, priority : byte, link : int<trieState>)
-        =
+    /// Construct from individual components: character, hyphenation priority (0-9), and link to next state.
+    static member OfComponents (char : char) (priority : byte) (link : int<trieState>) =
         let charBits = uint64 (uint16 char)
         let priorityBits = (uint64 priority &&& 0xFUL) <<< 16
         let linkBits = (uint64 (int link) &&& 0xFFFFFFFFFFFUL) <<< 20
@@ -36,13 +39,17 @@ type PackedTrieEntry =
             Value = charBits ||| priorityBits ||| linkBits
         }
 
+    /// The character stored in this entry (bits 0-15).
     member inline this.Char : char = char (uint16 (this.Value &&& 0xFFFFUL))
+    /// The hyphenation priority at this position (bits 16-19, range 0-9).
     member inline this.Priority : byte = byte ((this.Value >>> 16) &&& 0xFUL)
 
+    /// The link to the next trie state (bits 20-63).
     member inline this.Link : int<trieState> =
         LanguagePrimitives.Int32WithMeasure (int (this.Value >>> 20))
 
-    static member Empty = PackedTrieEntry 0UL
+    /// An empty entry (all zeros), representing no transition.
+    static member Empty = PackedTrieEntry.OfValue 0UL
 
 /// The packed trie data structure for efficient pattern matching.
 /// You will normally extract a pre-computed one of these from the library using `LanguageData.load`,

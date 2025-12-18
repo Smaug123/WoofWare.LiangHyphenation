@@ -5,6 +5,9 @@ open System.IO.Compression
 open System.Reflection
 open System.Text
 
+/// Module containing methods for ser/de of a PackedTrie, so that you can precompute one and store it.
+///
+/// WoofWare.LiangHyphenation ships with precomputed data represented by the `KnownLanguage` DU.
 [<RequireQualifiedAccess>]
 module PackedTrieSerialization =
     // Magic bytes: "LHYP" (Liang HYPhenation)
@@ -64,7 +67,7 @@ module PackedTrieSerialization =
         let dataLength = reader.ReadInt32 ()
 
         let trieData =
-            Array.init dataLength (fun _ -> PackedTrieEntry (reader.ReadUInt64 ()))
+            Array.init dataLength (fun _ -> PackedTrieEntry.OfValue (reader.ReadUInt64 ()))
 
         // Read Bases array
         let basesLength = reader.ReadInt32 ()

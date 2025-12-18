@@ -4,11 +4,13 @@ namespace WoofWare.LiangHyphenation.Construction
 /// Uses a binary tree encoding: Left = next sibling, Right = first child.
 type LinkedTrieNode =
     {
+        /// The character this node represents in the trie.
         mutable Char : char
+        /// The hyphenation priority value at this position (0 means no priority set).
         mutable Priority : byte
-        // next sibling (different char at same depth)
+        /// Next sibling (different char at same depth).
         mutable Left : LinkedTrieNode option
-        /// first child (next char in pattern)
+        /// First child (next char in pattern).
         mutable Right : LinkedTrieNode option
     }
 

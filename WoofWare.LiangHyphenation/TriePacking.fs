@@ -144,7 +144,7 @@ module TriePacking =
                         let slot = baseIdx + charIdx
                         ensureCapacity (slot + 1)
                         let childState = nodeToState.[childNode]
-                        data.[slot] <- PackedTrieEntry (c, priority, childState)
+                        data.[slot] <- PackedTrieEntry.OfComponents c priority childState
                         occupied.Add (slot) |> ignore
 
             // Trim data array

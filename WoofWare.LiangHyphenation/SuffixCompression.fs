@@ -1,8 +1,11 @@
 namespace WoofWare.LiangHyphenation.Construction
 
-open System
+open WoofWare.LiangHyphenation
 open System.Collections.Generic
 
+/// Module containing methods for compressing the trie.
+/// Suffix compression takes an existing trie and merges common subtries together, starting from the leaves
+/// and working upwards. (See p16 of Liang's thesis.)
 [<RequireQualifiedAccess>]
 module SuffixCompression =
     /// Hash a node based on its structure (for identifying equivalent nodes)
@@ -14,7 +17,7 @@ module SuffixCompression =
             h * 31
             + (
                 match node.Left with
-                | Some n -> hash (n :> obj)
+                | Some n -> hash n
                 | None -> 0
             )
 
@@ -22,7 +25,7 @@ module SuffixCompression =
             h * 31
             + (
                 match node.Right with
-                | Some n -> hash (n :> obj)
+                | Some n -> hash n
                 | None -> 0
             )
 
@@ -32,8 +35,8 @@ module SuffixCompression =
     let private nodesEqual (a : LinkedTrieNode) (b : LinkedTrieNode) : bool =
         a.Char = b.Char
         && a.Priority = b.Priority
-        && Object.ReferenceEquals (a.Left, b.Left)
-        && Object.ReferenceEquals (a.Right, b.Right)
+        && Object.referenceEquals a.Left b.Left
+        && Object.referenceEquals a.Right b.Right
 
     /// Perform suffix compression on the trie, merging equivalent subtries.
     /// Returns a mapping from original nodes to canonical nodes.
@@ -49,10 +52,10 @@ module SuffixCompression =
             // Now find or create canonical version
             let h = hashNode node
 
-            match canonical.TryGetValue (h) with
+            match canonical.TryGetValue h with
             | false, _ ->
                 let bucket = ResizeArray<LinkedTrieNode> ()
-                bucket.Add (node)
+                bucket.Add node
                 canonical.[h] <- bucket
                 mapping.[node] <- node
                 node
@@ -62,7 +65,7 @@ module SuffixCompression =
                     mapping.[node] <- existing
                     existing
                 | None ->
-                    bucket.Add (node)
+                    bucket.Add node
                     mapping.[node] <- node
                     node
 
