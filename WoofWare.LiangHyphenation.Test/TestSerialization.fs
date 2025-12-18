@@ -10,20 +10,12 @@ open WoofWare.LiangHyphenation.Construction
 [<TestFixture>]
 module TestSerialization =
 
-    let private embeddedResourceName = LanguageData.getResourceName KnownLanguage.EnGb
-
-    let private patternsResourceName =
-        "WoofWare.LiangHyphenation.Test.Patterns.hyph-en-gb.pat.txt"
-
-    let private exceptionsResourceName =
-        "WoofWare.LiangHyphenation.Test.Patterns.hyph-en-gb.hyp.txt"
-
-    let private embeddedResourcePath =
+    let private embeddedResourcePath (language : KnownLanguage) =
         Path.Combine (
             FileInfo(__SOURCE_DIRECTORY__).Directory.FullName,
             "WoofWare.LiangHyphenation",
             "Data",
-            LanguageData.getResourceNameFragment KnownLanguage.EnGb
+            LanguageData.getResourceNameFragment language
         )
 
     /// Load patterns from an embedded resource text file (one pattern per line).
@@ -48,32 +40,48 @@ module TestSerialization =
 
         patterns :> _
 
-    /// Get the patterns used to build the packed trie.
-    let private getPatterns () : string seq =
+    /// Get the patterns and exceptions used to build the packed trie.
+    /// Patterns contains hyph-en-gb.hyp.txt and hyph-en-gb.pat.txt, for example.
+    /// This function returns a map with key "en-gb" and values {the patterns loaded from pat.txt, the exceptions loaded from hyp.txt}.
+    let private getPatternsAndExceptions () : Map<string, string[] * string[]> =
         let assembly = Assembly.GetExecutingAssembly ()
-        loadPatternsFromResource assembly patternsResourceName
+        let prefix = "WoofWare.LiangHyphenation.Test.Patterns.hyph-"
+        let patSuffix = ".pat.txt"
 
-    /// Get the exceptions used to build the packed trie.
-    let private getExceptions () : string seq =
-        let assembly = Assembly.GetExecutingAssembly ()
-        loadPatternsFromResource assembly exceptionsResourceName
+        assembly.GetManifestResourceNames ()
+        |> Array.filter (fun name -> name.StartsWith prefix && name.EndsWith patSuffix)
+        |> Array.map (fun patResource ->
+            let langKey =
+                patResource.Substring (prefix.Length, patResource.Length - prefix.Length - patSuffix.Length)
 
-    /// Build a PackedTrie from the canonical pattern and exception sources.
-    let private buildPackedTrie () : PackedTrie =
-        let patterns = getPatterns ()
-        let exceptions = getExceptions ()
-        let builder = PackedTrieBuilder ()
-        builder.AddPatterns patterns
-        builder.AddExceptions exceptions
-        builder.Build ()
+            let hypResource = $"{prefix}{langKey}.hyp.txt"
+            let patterns = loadPatternsFromResource assembly patResource |> Seq.toArray
 
-    [<Test>]
-    [<Explicit("Run this test to regenerate the embedded resource file")>]
-    let ``Regenerate embedded resource`` () =
-        let trie = buildPackedTrie ()
-        let bytes = PackedTrieSerialization.serialize trie
-        File.WriteAllBytes (embeddedResourcePath, bytes)
-        printfn $"Wrote %d{bytes.Length} bytes to %s{embeddedResourcePath}"
+            let exceptions =
+                if Array.contains hypResource (assembly.GetManifestResourceNames ()) then
+                    loadPatternsFromResource assembly hypResource |> Seq.toArray
+                else
+                    [||]
+
+            langKey, (patterns, exceptions)
+        )
+        |> Map.ofArray
+
+    /// Build a PackedTrie from the canonical pattern and exception sources for a given language.
+    let private buildPackedTrie (language : KnownLanguage) : PackedTrie =
+        let fragment = LanguageData.getResourceNameFragment language
+        let langKey = fragment.Replace (".bin", "")
+        let allData = getPatternsAndExceptions ()
+
+        match Map.tryFind langKey allData with
+        | None ->
+            let available = allData |> Map.toSeq |> Seq.map fst |> String.concat ", "
+            failwith $"No patterns found for language key '%s{langKey}'. Available: %s{available}"
+        | Some (patterns, exceptions) ->
+            let builder = PackedTrieBuilder ()
+            builder.AddPatterns patterns
+            builder.AddExceptions exceptions
+            builder.Build ()
 
     /// Compare two tries for structural equality.
     let private triesEqual (a : PackedTrie) (b : PackedTrie) : bool =
@@ -84,11 +92,21 @@ module TestSerialization =
         && Array.forall2 (=) a.Bases b.Bases
         && Array.forall2 (=) a.CharMap b.CharMap
 
-    [<Test>]
-    let ``Embedded resource matches regenerated trie`` () =
-        let freshTrie = buildPackedTrie ()
-        let existingBytes = File.ReadAllBytes embeddedResourcePath
-        let existingTrie = PackedTrieSerialization.deserialize existingBytes
+    let languageCases = UnionCases.all<KnownLanguage> ()
+
+    [<TestCaseSource(nameof languageCases)>]
+    [<Explicit("Run this test to regenerate the embedded resource file")>]
+    let ``Regenerate embedded resource`` (language : KnownLanguage) =
+        let trie = buildPackedTrie language
+        let bytes = PackedTrieSerialization.serialize trie
+        let path = embeddedResourcePath language
+        File.WriteAllBytes (path, bytes)
+        printfn $"Wrote %d{bytes.Length} bytes to %s{path}"
+
+    [<TestCaseSource(nameof languageCases)>]
+    let ``Embedded resource matches regenerated trie`` (language : KnownLanguage) =
+        let freshTrie = buildPackedTrie language
+        let existingTrie = LanguageData.load language
 
         // Compare the deserialized tries rather than raw bytes, since GZip output
         // is platform-dependent (e.g., the OS byte in the header differs between Linux and macOS).
@@ -103,7 +121,7 @@ module TestSerialization =
             let charMapMatch = Array.forall2 (=) freshTrie.CharMap existingTrie.CharMap
 
             failwith
-                $"Embedded resource is out of date. Data length: %d{freshTrie.Data.Length} vs %d{existingTrie.Data.Length}, \
+                $"Embedded resource for %O{language} is out of date. Data length: %d{freshTrie.Data.Length} vs %d{existingTrie.Data.Length}, \
                   Bases length: %d{freshTrie.Bases.Length} vs %d{existingTrie.Bases.Length}, \
                   AlphabetSize: %d{int freshTrie.AlphabetSize} vs %d{int existingTrie.AlphabetSize}, \
                   Data match: %b{dataMatch}, Bases match: %b{basesMatch}, CharMap match: %b{charMapMatch}. \
@@ -153,9 +171,7 @@ module TestSerialization =
             let roundTrippedResult = Hyphenation.hyphenate roundTripped word
             roundTrippedResult |> shouldEqual originalResult
 
-    let cases = UnionCases.all<KnownLanguage> ()
-
-    [<TestCaseSource(nameof cases)>]
+    [<TestCaseSource(nameof languageCases)>]
     let ``Can load language data`` (language : KnownLanguage) =
         let trie = LanguageData.load language
         trie.Data |> shouldNotEqual null
