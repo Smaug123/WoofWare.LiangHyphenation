@@ -49,8 +49,8 @@ module Hyphenation =
                                 $"      Pattern end! Priorities=[%s{prioStr}]"
                             )
                             // Apply the pattern's priority vector at the appropriate positions.
-                            // patternPriorities[i] applies at extended inter-letter position (start + i).
-                            // Extended inter-letter pos k maps to original inter-letter pos (k - 2).
+                            // patternPriorities[i] applies at extended inter-letter position (start + i - 1).
+                            // Extended inter-letter pos k maps to original inter-letter pos (k - 1).
                             // So patternPriorities[i] applies at original pos (start + i - 2).
                             for i = 0 to patternPriorities.Length - 1 do
                                 let origPos = start + i - 2
@@ -81,10 +81,13 @@ module Hyphenation =
     /// You probably want to use `LanguageData.load` to acquire the PackedTrie.
     let getHyphenationPoints (trie : PackedTrie) (word : string) : int array =
         let priorities = hyphenate trie word
+        let result = ResizeArray<int> ()
 
-        priorities
-        |> Array.mapi (fun i p -> if p % 2uy = 1uy then Some i else None)
-        |> Array.choose id
+        for i = 0 to priorities.Length - 1 do
+            if priorities.[i] % 2uy = 1uy then
+                result.Add i
+
+        result.ToArray ()
 
     /// Insert hyphens into a word at all allowed positions.
     /// You shouldn't use this function in production: it simply shows you all the allowable breaks,
