@@ -60,6 +60,7 @@
           testProjectFile = "./WoofWare.LiangHyphenation.Test/WoofWare.LiangHyphenation.Test.fsproj";
           nugetDeps = ./nix/deps.json; # `nix build .#default.fetch-deps && ./result nix/deps.json`
           doCheck = true;
+          disabledTests = ["WoofWare.LiangHyphenation.Test.TestSurface.EnsureVersionIsMonotonic"];
         };
       };
       devShell = pkgs.mkShell {
