@@ -93,7 +93,15 @@ module PackedTrie =
             else
                 let entry = trie.Data.[slot]
 
-                if entry.Char = c then ValueSome entry.Link else ValueNone
+                // An empty (unoccupied) slot is all-zeros, decoding as Char='\000', Link=0.
+                // No legitimate transition ever links to state 0 (the root is nobody's
+                // child), so Link=0 uniquely identifies an empty slot. Without this guard,
+                // a '\000' in the input would "match" an empty slot and spuriously
+                // transition back to the root.
+                if entry.Char = c && entry.Link <> root then
+                    ValueSome entry.Link
+                else
+                    ValueNone
 
     /// Get the pattern-end priority vector for a state, if any.
     let inline getPatternPriorities (trie : PackedTrie) (state : int<trieState>) : byte array option =

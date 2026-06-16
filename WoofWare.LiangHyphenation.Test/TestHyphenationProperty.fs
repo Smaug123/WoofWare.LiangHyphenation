@@ -287,6 +287,113 @@ module PropertyTests =
         packedResult |> shouldEqual [| 0uy ; 0uy ; 0uy ; 0uy ; 0uy ; 0uy ; 0uy |]
 
 // ============================================================================
+// NUL / sentinel soundness tests
+//
+// The packed trie's root sentinel node carries char '\000'. If that sentinel
+// leaks into the alphabet, or if an all-zero (empty) packed slot is mistaken
+// for a real transition, then a '\000' in the input word can spuriously
+// transition back to the root and misapply later patterns. These tests pin the
+// packed trie to the obviously-correct naive reference for inputs containing
+// '\000'.
+// ============================================================================
+
+module NulGenerators =
+    /// A small alphabet including the NUL sentinel, chosen so that packing
+    /// collisions (and therefore any soundness hole) surface quickly.
+    let private wordChars : char list = [ '\000' ; 'a' ; 'b' ; 'c' ; 'd' ; 'e' ]
+
+    let private wordChar : Gen<char> = Gen.elements wordChars
+
+    /// A pattern character that is a letter or '.' (never a digit, which would be a priority).
+    let private patternChar : Gen<char> =
+        Gen.frequency [ (5, Gen.elements [ 'a' ; 'b' ; 'c' ; 'd' ; 'e' ]) ; (1, Gen.constant '.') ]
+
+    /// A pattern character drawn from the small alphabet, including the NUL sentinel,
+    /// so that '\000' appears as a genuine pattern character.
+    let private patternCharWithNul : Gen<char> =
+        Gen.frequency [ (5, patternChar) ; (2, Gen.constant '\000') ]
+
+    let private patternOf (charGen : Gen<char>) : Gen<string> =
+        gen {
+            let! leadingDigit = Gen.optionOf Generators.priorityDigit
+            let! charCount = Gen.choose (1, 6)
+            let! chars = Gen.listOfLength charCount charGen
+            let! trailingDigits = Gen.listOfLength charCount (Gen.optionOf Generators.priorityDigit)
+
+            let sb = System.Text.StringBuilder ()
+            leadingDigit |> Option.iter (sb.Append >> ignore)
+
+            for i = 0 to chars.Length - 1 do
+                sb.Append (chars.[i]) |> ignore
+                trailingDigits.[i] |> Option.iter (sb.Append >> ignore)
+
+            return sb.ToString ()
+        }
+
+    /// Patterns over letters/'.', i.e. NUL never appears as a genuine pattern char.
+    let nulFreePatternList : Gen<string list> =
+        Gen.listOf (patternOf patternChar) |> Gen.map (List.truncate 30)
+
+    /// Patterns that may contain the NUL sentinel as a genuine pattern character.
+    let nulPatternList : Gen<string list> =
+        Gen.listOf (patternOf patternCharWithNul) |> Gen.map (List.truncate 30)
+
+    /// A word drawn from the small alphabet, so it frequently contains '\000'.
+    let word : Gen<string> =
+        gen {
+            let! length = Gen.choose (1, 10)
+            let! chars = Gen.listOfLength length wordChar
+            return String (chars |> List.toArray)
+        }
+
+[<TestFixture>]
+module NulSoundnessTests =
+
+    let private packedAgreesWithNaive (patterns : string list) (word : string) : unit =
+        let naiveTrie = NaiveTrie.build patterns
+
+        let packedTrie =
+            let builder = PackedTrieBuilder ()
+            builder.AddPatterns patterns
+            builder.Build ()
+
+        let naiveResult = NaiveTrie.hyphenate naiveTrie word
+        let packedResult = Hyphenation.hyphenate packedTrie word
+        packedResult |> shouldEqual naiveResult
+
+    [<Test>]
+    let ``Packed trie matches naive trie for words containing NUL`` () =
+        let gen = Gen.zip NulGenerators.nulFreePatternList NulGenerators.word |> Arb.fromGen
+        Check.One (FsCheckConfig.config, Prop.forAll gen (fun (patterns, word) -> packedAgreesWithNaive patterns word))
+
+    [<Test>]
+    let ``Packed trie matches naive trie when NUL is a genuine pattern char`` () =
+        let gen = Gen.zip NulGenerators.nulPatternList NulGenerators.word |> Arb.fromGen
+        Check.One (FsCheckConfig.config, Prop.forAll gen (fun (patterns, word) -> packedAgreesWithNaive patterns word))
+
+    [<Test>]
+    let ``Regression: NUL in word must not transition back to root`` () =
+        // A '\000' in the input word previously matched an empty (all-zero) packed
+        // slot, spuriously transitioning to the root and misapplying later patterns.
+        // This is a counterexample found by the property test above: the buggy packed
+        // trie reported [5;5;5;5;4;0;0] instead of the correct [0;0;5;5;4;0;0].
+        let patterns = [ "9a9e1..6" ; "5e5c4" ]
+        let word = "\000\000\000ecba\000"
+
+        let naiveTrie = NaiveTrie.build patterns
+
+        let packedTrie =
+            let builder = PackedTrieBuilder ()
+            builder.AddPatterns patterns
+            builder.Build ()
+
+        let naiveResult = NaiveTrie.hyphenate naiveTrie word
+        let packedResult = Hyphenation.hyphenate packedTrie word
+
+        naiveResult |> shouldEqual [| 0uy ; 0uy ; 5uy ; 5uy ; 4uy ; 0uy ; 0uy |]
+        packedResult |> shouldEqual naiveResult
+
+// ============================================================================
 // Position Correctness Tests (independent of reference implementation)
 // ============================================================================
 
