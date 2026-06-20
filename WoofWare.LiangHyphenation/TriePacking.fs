@@ -13,16 +13,22 @@ module TriePacking =
         let nodes = HashSet<LinkedTrieNode> HashIdentity.Reference
         let chars = HashSet<char> ()
 
-        let rec visit (node : LinkedTrieNode option) =
+        let rec visit (isRoot : bool) (node : LinkedTrieNode option) =
             match node with
             | None -> ()
             | Some n ->
                 if nodes.Add n then
-                    chars.Add n.Char |> ignore
-                    visit n.Left
-                    visit n.Right
+                    // The root is a sentinel start state, not a real character; its Char is the
+                    // '\000' placeholder. Adding it to the alphabet both wastes a dense slot in
+                    // every state and lets a '\000' input collide with empty packed slots.
+                    if not isRoot then
+                        chars.Add n.Char |> ignore
 
-        visit root
+                    // Left = sibling (same depth), Right = child; neither is ever the root.
+                    visit false n.Left
+                    visit false n.Right
+
+        visit true root
 
         // Build char map: char -> dense index
         let sortedChars = chars |> Seq.sort |> Seq.toArray
@@ -168,6 +174,14 @@ module TriePacking =
                         let slot = baseIdx + charIdx
                         ensureCapacity (slot + 1)
                         let childState = nodeToState.[childNode]
+#if DEBUG
+                        // PackedTrie.tryTransition treats an entry with Link = 0 (the root state) as
+                        // an empty slot, so no legitimate transition may target the root. The root is
+                        // nobody's child by construction; assert it here so a future change can't
+                        // silently reopen the '\000' soundness hole.
+                        if childState = PackedTrie.root then
+                            failwith "Invariant violated: a packed transition targets the root state (0)"
+#endif
                         data.[slot] <- PackedTrieEntry.OfComponents c childState
                         occupied.Add slot |> ignore
 
