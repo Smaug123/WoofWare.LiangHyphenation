@@ -1,8 +1,11 @@
 namespace WoofWare.LiangHyphenation.Test
 
 open System.IO
+open System.IO.Compression
 open System.Reflection
 open NUnit.Framework
+open FsCheck
+open FsCheck.FSharp
 open FsUnitTyped
 open WoofWare.LiangHyphenation
 open WoofWare.LiangHyphenation.Construction
@@ -100,6 +103,96 @@ module TestSerialization =
         && Array.forall2 (=) a.Bases b.Bases
         && Array.forall2 (=) a.CharMap b.CharMap
         && Array.forall2 prioritiesEqual a.PatternPriorities b.PatternPriorities
+
+    /// GZip-compress raw bytes the same way `PackedTrieSerialization.serialize` does, so we can
+    /// craft hand-made (e.g. wrong-version) payloads for the deserializer to reject.
+    let private gzipBytes (uncompressed : byte array) : byte array =
+        use output = new MemoryStream ()
+        use gzip = new GZipStream (output, CompressionLevel.Optimal)
+        gzip.Write (uncompressed, 0, uncompressed.Length)
+        gzip.Close ()
+        output.ToArray ()
+
+    /// Serialize a trie in the historical v1 on-disk format: identical to v2 except each CharMap
+    /// char is written via BinaryWriter.Write(char) (UTF-8), as the pre-astral serializer did. This
+    /// format is frozen and exists only to exercise the v1 -> v2 read-compatibility path. It cannot
+    /// represent astral characters (Write(char) rejects lone surrogates), so use it only with BMP
+    /// alphabets.
+    let private serializeV1 (trie : PackedTrie) : byte array =
+        let writeAll (stream : Stream) =
+            use writer = new BinaryWriter (stream, System.Text.Encoding.UTF8, leaveOpen = true)
+            writer.Write [| 0x4Cuy ; 0x48uy ; 0x59uy ; 0x50uy |] // magic "LHYP"
+            writer.Write 1uy // version 1
+
+            writer.Write trie.Data.Length
+
+            for entry in trie.Data do
+                writer.Write entry.Value
+
+            writer.Write trie.Bases.Length
+
+            for baseIdx in trie.Bases do
+                writer.Write (int baseIdx)
+
+            let charMapEntries =
+                trie.CharMap
+                |> Array.mapi (fun i idx -> (char i, idx))
+                |> Array.filter (fun (_, idx) -> idx >= 0<alphabetIndex>)
+
+            writer.Write charMapEntries.Length
+
+            for c, idx in charMapEntries do
+                writer.Write c // v1: UTF-8-encoded char
+                writer.Write (idx / 1<alphabetIndex>)
+
+            writer.Write (int trie.AlphabetSize)
+            writer.Write trie.PatternPriorities.Length
+
+            for priorities in trie.PatternPriorities do
+                match priorities with
+                | None -> writer.Write 0uy
+                | Some arr ->
+                    writer.Write (byte arr.Length)
+                    writer.Write arr
+
+        use output = new MemoryStream ()
+        use gzip = new GZipStream (output, CompressionLevel.Optimal)
+        writeAll gzip
+        gzip.Close ()
+        output.ToArray ()
+
+    /// A pattern "character" rendered as a string: a BMP letter, '.', or an astral (non-BMP)
+    /// character, which in a UTF-16 string is a surrogate pair (two lone-surrogate code units).
+    let private patternCharStr : Gen<string> =
+        Gen.frequency
+            [
+                (20, Gen.choose (int 'a', int 'z') |> Gen.map (char >> string))
+                (2, Gen.constant ".")
+                (5, Gen.choose (0x10000, 0x10FFFF) |> Gen.map System.Char.ConvertFromUtf32)
+            ]
+
+    /// A valid Liang pattern whose alphabet may include astral characters.
+    let private astralPattern : Gen<string> =
+        gen {
+            let! leadingDigit = Gen.optionOf Generators.priorityDigit
+            let! charCount = Gen.choose (1, 8)
+            let! chars = Gen.listOfLength charCount patternCharStr
+            let! trailingDigits = Gen.listOfLength charCount (Gen.optionOf Generators.priorityDigit)
+
+            let sb = System.Text.StringBuilder ()
+            leadingDigit |> Option.iter (sb.Append >> ignore<System.Text.StringBuilder>)
+
+            for i = 0 to chars.Length - 1 do
+                sb.Append chars.[i] |> ignore<System.Text.StringBuilder>
+
+                trailingDigits.[i]
+                |> Option.iter (sb.Append >> ignore<System.Text.StringBuilder>)
+
+            return sb.ToString ()
+        }
+
+    let private astralPatternList : Gen<string list> =
+        Gen.listOf astralPattern |> Gen.map (List.truncate 30)
 
     let languageCases = UnionCases.all<KnownLanguage> ()
 
@@ -200,6 +293,80 @@ module TestSerialization =
             Assert.Throws<exn> (fun () -> PackedTrieSerialization.serialize trie |> ignore<byte array>)
 
         exn.Message.Contains "301" |> shouldEqual true
+
+    [<Test>]
+    let ``Regression: serialization round-trips a trie whose alphabet contains an astral character`` () =
+        // U+1F600 GRINNING FACE is astral: in a UTF-16 string it's the surrogate pair D83D DE00.
+        // Each half enters the alphabet as a lone surrogate. Serialization used to throw here, because
+        // BinaryWriter.Write(char) refuses to write surrogate chars; we now write raw uint16 code units.
+        let astral = "\U0001F600"
+
+        let builder = PackedTrieBuilder ()
+        builder.AddPatterns [ "." + astral + "3b" ]
+        let original = builder.Build ()
+
+        let roundTripped =
+            original
+            |> PackedTrieSerialization.serialize
+            |> PackedTrieSerialization.deserialize
+
+        triesEqual original roundTripped |> shouldEqual true
+
+        // The deserialized trie hyphenates identically: a break after the whole emoji (inter-letter
+        // index 1) and crucially none between the two surrogate halves (index 0).
+        let word = astral + "b"
+        Hyphenation.getHyphenationPoints roundTripped word |> shouldEqual [| 1 |]
+
+        Hyphenation.getHyphenationPoints roundTripped word
+        |> shouldEqual (Hyphenation.getHyphenationPoints original word)
+
+    [<Test>]
+    let ``Serialization round-trips for arbitrary patterns including astral characters`` () =
+        let property (patterns : string list) =
+            let original =
+                let builder = PackedTrieBuilder ()
+                builder.AddPatterns patterns
+                builder.Build ()
+
+            let roundTripped =
+                original
+                |> PackedTrieSerialization.serialize
+                |> PackedTrieSerialization.deserialize
+
+            triesEqual original roundTripped |> shouldEqual true
+
+        let gen = astralPatternList |> Arb.fromGen
+        // 10000 trie builds + serializations is needlessly slow; 1000 amply exercises the surrogate path.
+        Check.One (FsCheckConfig.config.WithMaxTest 1000, Prop.forAll gen property)
+
+    [<Test>]
+    let ``Deserialization reads the legacy v1 format (compatibility path)`` () =
+        // v1 (pre-astral) blobs persisted by consumers via `serialize` must still load. Build a
+        // BMP-only trie (v1 cannot encode astral chars), write it in the frozen v1 format, and
+        // confirm the current deserializer reconstructs the same trie and hyphenates identically.
+        let builder = PackedTrieBuilder ()
+        builder.AddPatterns [ ".hy3p" ; "4ab1c" ; "1a" ; "tion5" ; "ex1am3ple" ]
+        let original = builder.Build ()
+
+        let roundTripped = original |> serializeV1 |> PackedTrieSerialization.deserialize
+
+        triesEqual original roundTripped |> shouldEqual true
+
+        for word in [ "hyphenation" ; "example" ; "action" ; "hello" ] do
+            Hyphenation.hyphenate roundTripped word
+            |> shouldEqual (Hyphenation.hyphenate original word)
+
+    [<Test>]
+    let ``Deserializing an unknown version fails loudly`` () =
+        // v1 and v2 are both supported (v1 via the compatibility path), so an unrecognised version
+        // byte (here 99) must be rejected loudly rather than misdecoded.
+        let header = [| 0x4Cuy ; 0x48uy ; 0x59uy ; 0x50uy ; 99uy |]
+        let payload = gzipBytes header
+
+        let exn =
+            Assert.Throws<exn> (fun () -> PackedTrieSerialization.deserialize payload |> ignore<PackedTrie>)
+
+        exn.Message.Contains "version" |> shouldEqual true
 
     [<TestCaseSource(nameof languageCases)>]
     let ``Can load language data`` (language : KnownLanguage) =
