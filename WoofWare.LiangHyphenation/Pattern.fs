@@ -49,7 +49,16 @@ module Pattern =
     ///
     /// Example: "uni-ver-sity" → ".u8n8i9v8e8r9s8i8t8y."
     /// The 9s appear before 'v' and 's', allowing hyphenation at uni-ver-sity.
+    ///
+    /// The exception is lower-cased (as TeX does for \hyphenation entries), because `Hyphenation.hyphenate`
+    /// lower-cases the word before matching; an exception that kept its case would compile to a pattern that
+    /// could never match. Each hyphen must sit strictly between two letters: a leading, trailing, or doubled
+    /// hyphen marks a break at (or before, or after) a word boundary, which is meaningless, so it is rejected
+    /// rather than silently dropped or relocated.
     let exceptionToPattern (exception' : string) : string =
+        // Lower-case to match the lower-casing that `hyphenate` applies to the word.
+        let exception' = exception'.ToLowerInvariant ()
+
         let sb = StringBuilder ()
         sb.Append '.' |> ignore<StringBuilder>
 
@@ -58,7 +67,17 @@ module Pattern =
 
         for c in exception' do
             if c = '-' then
-                // The hyphen means the NEXT inter-letter position allows hyphenation
+                // The hyphen means the NEXT inter-letter position allows hyphenation. It must follow a
+                // letter (not be the first character, and not follow another hyphen): otherwise it marks
+                // a break at a word boundary, which a pattern cannot express.
+                if isFirst then
+                    failwith
+                        $"Hyphenation exception '%s{exception'}' must not begin with a hyphen: a hyphen marks a break between two letters."
+
+                if nextPriorityIs9 then
+                    failwith
+                        $"Hyphenation exception '%s{exception'}' must not contain consecutive hyphens: a hyphen marks a break between two letters."
+
                 nextPriorityIs9 <- true
             else
                 // Add priority before each letter (except the first)
@@ -71,6 +90,12 @@ module Pattern =
 
                 sb.Append c |> ignore<StringBuilder>
                 isFirst <- false
+
+        // A hyphen with no following letter marks a break after the last letter, i.e. at the trailing
+        // word boundary; reject it rather than silently dropping it.
+        if nextPriorityIs9 then
+            failwith
+                $"Hyphenation exception '%s{exception'}' must not end with a hyphen: a hyphen marks a break between two letters."
 
         sb.Append '.' |> ignore
         sb.ToString ()
