@@ -187,6 +187,20 @@ module TestSerialization =
             let roundTrippedResult = Hyphenation.hyphenate roundTripped word
             roundTrippedResult |> shouldEqual originalResult
 
+    [<Test>]
+    let ``Serialization refuses priority vectors longer than 255`` () =
+        // A priority vector has length (pattern chars + 1) and is serialized with a single-byte length
+        // prefix (with 0 reserved to mean None). A pattern of 255+ characters would overflow that byte,
+        // silently corrupting the data on round-trip, so serialization must fail loudly instead.
+        let builder = PackedTrieBuilder ()
+        builder.AddPatterns [ System.String ('a', 300) ]
+        let trie = builder.Build ()
+
+        let exn =
+            Assert.Throws<exn> (fun () -> PackedTrieSerialization.serialize trie |> ignore<byte array>)
+
+        exn.Message.Contains "301" |> shouldEqual true
+
     [<TestCaseSource(nameof languageCases)>]
     let ``Can load language data`` (language : KnownLanguage) =
         let trie = LanguageData.load language
