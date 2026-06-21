@@ -55,6 +55,13 @@ module Pattern =
     /// could never match. Each hyphen must sit strictly between two letters: a leading, trailing, or doubled
     /// hyphen marks a break at (or before, or after) a word boundary, which is meaningless, so it is rejected
     /// rather than silently dropped or relocated.
+    ///
+    /// The remaining characters become word content. They must not be pattern metacharacters: ASCII digits
+    /// ('0'..'9') are priority markers and '.' is the word-boundary marker. Because this function builds a
+    /// pattern *string* that is re-parsed (by `Pattern.parse`), a digit or '.' left in the content would not
+    /// survive the round-trip -- a digit would be re-read as a priority (so "a-1b" would compile a pattern
+    /// for the word "ab") and a '.' would inject a spurious interior word boundary. Such characters are
+    /// rejected rather than silently corrupting the compiled exception.
     let exceptionToPattern (exception' : string) : string =
         // Lower-case to match the lower-casing that `hyphenate` applies to the word.
         let exception' = exception'.ToLowerInvariant ()
@@ -80,6 +87,17 @@ module Pattern =
 
                 nextPriorityIs9 <- true
             else
+                // This character becomes word content, so it must not collide with a pattern metacharacter.
+                // Digits are priority markers and '.' is the word-boundary marker; either would be silently
+                // misinterpreted when the generated pattern string is re-parsed (see the doc comment).
+                if c >= '0' && c <= '9' then
+                    failwith
+                        $"Hyphenation exception '%s{exception'}' must not contain the digit '%c{c}': digits are reserved as priority markers in hyphenation patterns."
+
+                if c = '.' then
+                    failwith
+                        $"Hyphenation exception '%s{exception'}' must not contain '.': it is reserved as the word-boundary marker in hyphenation patterns."
+
                 // Add priority before each letter (except the first)
                 if not isFirst then
                     if nextPriorityIs9 then

@@ -57,6 +57,57 @@ module TestException =
 
         exn.Message.Contains "a--b" |> shouldEqual true
 
+    [<Test>]
+    let ``Digits in exceptions are rejected`` () =
+        // Digits are reserved as priority markers in the pattern language. exceptionToPattern builds a
+        // pattern *string* that AddException re-parses, so a digit treated as word content is silently
+        // reinterpreted as a priority on the way back in: "a-1b" used to compile to a pattern for the word
+        // "ab" (the '1' eaten as a priority) rather than being rejected.
+        for bad in [ "a1b" ; "a-1b" ; "1ab" ; "ab2" ; "9" ] do
+            let exn =
+                Assert.Throws<exn> (fun () -> Pattern.exceptionToPattern bad |> ignore<string>)
+
+            exn.Message.Contains bad |> shouldEqual true
+
+    [<Test>]
+    let ``Word-boundary markers in exceptions are rejected`` () =
+        // '.' is the word-boundary marker that `hyphenate` wraps around the word. Allowing it as content
+        // injects a spurious interior boundary into the generated pattern, compiling an exception for a
+        // different (boundary-split) word.
+        for bad in [ "a.b" ; ".ab" ; "ab." ] do
+            let exn =
+                Assert.Throws<exn> (fun () -> Pattern.exceptionToPattern bad |> ignore<string>)
+
+            exn.Message.Contains bad |> shouldEqual true
+
+    /// The set of characters that cannot appear as word content -- ASCII digits (priority markers) and the
+    /// '.' word-boundary marker -- must be rejected in any position, otherwise the string round-trip through
+    /// `Pattern.parse` silently corrupts the compiled exception. Hyphens are excluded from the generated
+    /// input so that the *only* reason to reject is the reserved character.
+    [<Test>]
+    let ``Reserved metacharacters in exceptions are rejected`` () =
+        let reserved = "0123456789."
+
+        let gen =
+            gen {
+                let! prefixLen = Gen.choose (0, 5)
+                let! suffixLen = Gen.choose (0, 5)
+                let letter = Gen.choose (int 'a', int 'z') |> Gen.map char
+                let! prefix = Gen.listOfLength prefixLen letter
+                let! suffix = Gen.listOfLength suffixLen letter
+                let! bad = Gen.elements (List.ofSeq reserved)
+                return System.String (List.toArray (prefix @ [ bad ] @ suffix))
+            }
+            |> Arb.fromGen
+
+        let property (s : string) =
+            Assert.Throws<exn> (fun () -> Pattern.exceptionToPattern s |> ignore<string>)
+            |> ignore<exn>
+
+            true
+
+        Check.One (FsCheckConfig.config, Prop.forAll gen property)
+
     /// An exception forces breaks at exactly the positions it marks with a hyphen and suppresses every
     /// other inter-letter position, regardless of the case in which it is supplied. This is the contract
     /// of `AddException`, and it pins down both the lowercasing fix (uppercase exceptions must still take
