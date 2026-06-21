@@ -16,6 +16,7 @@
     <Compile Include="TestIntegration.fs" />
     <Compile Include="TestTrieBuilder.fs" />
     <Compile Include="TestPatternParsing.fs" />
+    <Compile Include="TestException.fs" />
     <Compile Include="TestSerialization.fs" />
     <Compile Include="TestSurface.fs" />
     <EmbeddedResource Include="Patterns/*.txt" />
