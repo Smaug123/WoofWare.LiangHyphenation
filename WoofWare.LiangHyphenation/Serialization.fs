@@ -19,9 +19,12 @@ module PackedTrieSerialization =
     //       pair, each half a lone surrogate, and BinaryWriter.Write(char) rejects surrogate
     //       chars outright, so serializing such a trie threw.
     //   2 — writes each alphabet char as a raw little-endian UTF-16 code unit (uint16), which
-    //       round-trips lone surrogate halves losslessly. The byte layout of the char field
-    //       changed (UTF-8 → fixed 2 bytes), so v1 data cannot be read as v2; the version bump
-    //       makes a stale v1 file fail loudly here rather than be silently misdecoded.
+    //       round-trips lone surrogate halves losslessly.
+    //
+    // We always write the current version. The two formats differ only in how each CharMap char is
+    // encoded (UTF-8 vs fixed uint16) — the same logical data either way — so the deserializer reads
+    // v1 transparently via a compatibility path (see `readCodeUnit` in deserializeFromStream). This
+    // keeps v1 blobs that consumers persisted through `serialize` loadable.
     let private version = 2uy
 
     let private serializeToStream (trie : PackedTrie) (stream : Stream) : unit =
@@ -88,11 +91,18 @@ module PackedTrieSerialization =
         if readMagic <> magic then
             failwith "Invalid PackedTrie data: bad magic bytes"
 
-        // Read and verify version
+        // Read the version, and from it pick how to decode each CharMap char — the sole on-the-wire
+        // difference between the formats. Unknown versions fail loudly rather than being misdecoded.
         let readVersion = reader.ReadByte ()
 
-        if readVersion <> version then
-            failwith $"Unsupported PackedTrie version: %d{int readVersion} (expected %d{int version})"
+        let readCodeUnit : unit -> int =
+            match readVersion with
+            // v1 wrote the char via BinaryWriter.Write(char) (UTF-8); ReadChar reverses that. v1 never
+            // contained lone surrogates (Write(char) would have thrown), so ReadChar is always safe here.
+            | 1uy -> fun () -> int<char> (reader.ReadChar ())
+            // v2 writes a raw little-endian UTF-16 code unit, which can hold a lone surrogate half.
+            | 2uy -> fun () -> int (reader.ReadUInt16 ())
+            | v -> failwith $"Unsupported PackedTrie version: %d{int v} (supported: 1, 2)"
 
         // Read Data array (32-bit entries)
         let dataLength = reader.ReadInt32 ()
@@ -111,9 +121,7 @@ module PackedTrieSerialization =
         let charMapEntryCount = reader.ReadInt32 ()
 
         for _ = 0 to charMapEntryCount - 1 do
-            // Read the raw UTF-16 code unit written by serializeToStream (which avoids
-            // BinaryWriter.Write(char) because the alphabet can contain lone surrogate halves).
-            let codeUnit = int (reader.ReadUInt16 ())
+            let codeUnit = readCodeUnit ()
             let idx = reader.ReadInt32 ()
             charMap.[codeUnit] <- LanguagePrimitives.Int32WithMeasure idx
 

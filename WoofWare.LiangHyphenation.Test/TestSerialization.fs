@@ -113,6 +113,54 @@ module TestSerialization =
         gzip.Close ()
         output.ToArray ()
 
+    /// Serialize a trie in the historical v1 on-disk format: identical to v2 except each CharMap
+    /// char is written via BinaryWriter.Write(char) (UTF-8), as the pre-astral serializer did. This
+    /// format is frozen and exists only to exercise the v1 -> v2 read-compatibility path. It cannot
+    /// represent astral characters (Write(char) rejects lone surrogates), so use it only with BMP
+    /// alphabets.
+    let private serializeV1 (trie : PackedTrie) : byte array =
+        let writeAll (stream : Stream) =
+            use writer = new BinaryWriter (stream, System.Text.Encoding.UTF8, leaveOpen = true)
+            writer.Write [| 0x4Cuy ; 0x48uy ; 0x59uy ; 0x50uy |] // magic "LHYP"
+            writer.Write 1uy // version 1
+
+            writer.Write trie.Data.Length
+
+            for entry in trie.Data do
+                writer.Write entry.Value
+
+            writer.Write trie.Bases.Length
+
+            for baseIdx in trie.Bases do
+                writer.Write (int baseIdx)
+
+            let charMapEntries =
+                trie.CharMap
+                |> Array.mapi (fun i idx -> (char i, idx))
+                |> Array.filter (fun (_, idx) -> idx >= 0<alphabetIndex>)
+
+            writer.Write charMapEntries.Length
+
+            for c, idx in charMapEntries do
+                writer.Write c // v1: UTF-8-encoded char
+                writer.Write (idx / 1<alphabetIndex>)
+
+            writer.Write (int trie.AlphabetSize)
+            writer.Write trie.PatternPriorities.Length
+
+            for priorities in trie.PatternPriorities do
+                match priorities with
+                | None -> writer.Write 0uy
+                | Some arr ->
+                    writer.Write (byte arr.Length)
+                    writer.Write arr
+
+        use output = new MemoryStream ()
+        use gzip = new GZipStream (output, CompressionLevel.Optimal)
+        writeAll gzip
+        gzip.Close ()
+        output.ToArray ()
+
     /// A pattern "character" rendered as a string: a BMP letter, '.', or an astral (non-BMP)
     /// character, which in a UTF-16 string is a surrogate pair (two lone-surrogate code units).
     let private patternCharStr : Gen<string> =
@@ -292,12 +340,28 @@ module TestSerialization =
         Check.One (FsCheckConfig.config.WithMaxTest 1000, Prop.forAll gen property)
 
     [<Test>]
-    let ``Deserializing an unsupported (old) version fails loudly`` () =
-        // magic "LHYP" followed by version byte 1 (the pre-astral format). The byte layout of the
-        // char field changed in v2, so a stale v1 file must be rejected loudly on the version check
-        // rather than silently misdecoded.
-        let v1Header = [| 0x4Cuy ; 0x48uy ; 0x59uy ; 0x50uy ; 1uy |]
-        let payload = gzipBytes v1Header
+    let ``Deserialization reads the legacy v1 format (compatibility path)`` () =
+        // v1 (pre-astral) blobs persisted by consumers via `serialize` must still load. Build a
+        // BMP-only trie (v1 cannot encode astral chars), write it in the frozen v1 format, and
+        // confirm the current deserializer reconstructs the same trie and hyphenates identically.
+        let builder = PackedTrieBuilder ()
+        builder.AddPatterns [ ".hy3p" ; "4ab1c" ; "1a" ; "tion5" ; "ex1am3ple" ]
+        let original = builder.Build ()
+
+        let roundTripped = original |> serializeV1 |> PackedTrieSerialization.deserialize
+
+        triesEqual original roundTripped |> shouldEqual true
+
+        for word in [ "hyphenation" ; "example" ; "action" ; "hello" ] do
+            Hyphenation.hyphenate roundTripped word
+            |> shouldEqual (Hyphenation.hyphenate original word)
+
+    [<Test>]
+    let ``Deserializing an unknown version fails loudly`` () =
+        // v1 and v2 are both supported (v1 via the compatibility path), so an unrecognised version
+        // byte (here 99) must be rejected loudly rather than misdecoded.
+        let header = [| 0x4Cuy ; 0x48uy ; 0x59uy ; 0x50uy ; 99uy |]
+        let payload = gzipBytes header
 
         let exn =
             Assert.Throws<exn> (fun () -> PackedTrieSerialization.deserialize payload |> ignore<PackedTrie>)
