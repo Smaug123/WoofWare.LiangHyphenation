@@ -55,6 +55,14 @@ module PackedTrieSerialization =
             match priorities with
             | None -> writer.Write 0uy // 0 length means None
             | Some arr ->
+                // The length is encoded in a single byte, with 0 reserved to mean None, so a Some vector
+                // must have length in 1..255. The builder never produces an empty Some (it skips empty
+                // patterns), so in practice only the upper bound can be hit, by an implausibly long pattern.
+                // Fail loudly rather than wrap the length and silently corrupt the data on round-trip.
+                if arr.Length < 1 || arr.Length > 255 then
+                    failwith
+                        $"Cannot serialize a pattern priority vector of length %d{arr.Length}; the serialization format supports lengths 1..255 (a priority vector has length one more than its pattern, so this corresponds to patterns of up to 254 characters)."
+
                 writer.Write (byte arr.Length)
                 writer.Write arr
 
