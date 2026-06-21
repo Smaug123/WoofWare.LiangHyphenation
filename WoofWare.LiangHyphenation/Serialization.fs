@@ -12,7 +12,17 @@ open System.Text
 module PackedTrieSerialization =
     // Magic bytes: "LHYP" (Liang HYPhenation)
     let private magic = [| 0x4Cuy ; 0x48uy ; 0x59uy ; 0x50uy |]
-    let private version = 1uy
+
+    // Version history:
+    //   1 — wrote each alphabet char via BinaryWriter.Write(char) (UTF-8). This could not
+    //       represent astral characters: in a UTF-16 string an astral char is a surrogate
+    //       pair, each half a lone surrogate, and BinaryWriter.Write(char) rejects surrogate
+    //       chars outright, so serializing such a trie threw.
+    //   2 — writes each alphabet char as a raw little-endian UTF-16 code unit (uint16), which
+    //       round-trips lone surrogate halves losslessly. The byte layout of the char field
+    //       changed (UTF-8 → fixed 2 bytes), so v1 data cannot be read as v2; the version bump
+    //       makes a stale v1 file fail loudly here rather than be silently misdecoded.
+    let private version = 2uy
 
     let private serializeToStream (trie : PackedTrie) (stream : Stream) : unit =
         use writer = new BinaryWriter (stream, Encoding.UTF8, leaveOpen = true)
@@ -42,7 +52,10 @@ module PackedTrieSerialization =
         writer.Write charMapEntries.Length
 
         for c, idx in charMapEntries do
-            writer.Write c
+            // Write the char as a raw UTF-16 code unit. We cannot use writer.Write(char): the
+            // alphabet can contain lone surrogate halves (an astral character is two UTF-16 units,
+            // each an unpaired surrogate), and BinaryWriter.Write(char) rejects surrogate chars.
+            writer.Write (uint16 c)
             writer.Write (idx / 1<alphabetIndex>)
 
         // Write AlphabetSize
@@ -98,10 +111,11 @@ module PackedTrieSerialization =
         let charMapEntryCount = reader.ReadInt32 ()
 
         for _ = 0 to charMapEntryCount - 1 do
-            let c = reader.ReadChar ()
-            let asciiCode = int<char> c
+            // Read the raw UTF-16 code unit written by serializeToStream (which avoids
+            // BinaryWriter.Write(char) because the alphabet can contain lone surrogate halves).
+            let codeUnit = int (reader.ReadUInt16 ())
             let idx = reader.ReadInt32 ()
-            charMap.[asciiCode] <- LanguagePrimitives.Int32WithMeasure idx
+            charMap.[codeUnit] <- LanguagePrimitives.Int32WithMeasure idx
 
         // Read AlphabetSize
         let alphabetSize : int<alphabetIndex> =
